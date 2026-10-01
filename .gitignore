@@ -1,0 +1,5 @@
+.vscode
+__pycache__
+test.jpg
+test_voice.mp3
+generated/
