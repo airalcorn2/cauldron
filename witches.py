@@ -101,6 +101,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         similarity_boost=0.7,
         style=0.3,
         speed=0.92,
-        volume=0.75,  # Renders quieter than Violet/Amber at the same settings.
+        volume=0.95,  # Renders quieter than Violet/Amber at the same settings.
     ),
 }
