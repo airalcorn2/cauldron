@@ -1,5 +1,7 @@
 # Interactive Halloween Cauldron
 
+[![Demo](image.png)](https://www.instagram.com/p/Dd9_cGcqTMs/)
+
 An interactive prop built on a Raspberry Pi.
 Drop some items into the cauldron and an IR beam break starts the sequence: the camera takes a photo, a vision model writes a three-line spell about what it sees, and three text-to-speech "witch" voices recite it with the LED ring set to each witch's color.
 See [Materials](docs/materials.md) for the full parts list.
