@@ -47,7 +47,7 @@ Each hardware or service component is a standalone module that also runs on its 
 | `ir_sensor.py` | IR break-beam sensor (GPIO 17) | `.venv/bin/python ir_sensor.py` |
 | `camera.py` | USB camera capture | `.venv/bin/python camera.py test.jpg` |
 | `light_control.py` | LED ring over SPI (GPIO 10) | `.venv/bin/python light_control.py leds` |
-| `spell_generator.py` | Gemini vision model: spells (react) and recipes (request) | `.venv/bin/python spell_generator.py test.jpg` |
+| `spell_generator.py` | Gemini vision model: spells (react), stories (story), and recipes (request) | `.venv/bin/python spell_generator.py test.jpg` |
 | `voice_generator.py` | ElevenLabs text-to-speech | `.venv/bin/python voice_generator.py --text "..."` |
 | `audio.py` | Sound-effect and speech playback | `.venv/bin/python audio.py --loop 5` |
 | `actuator.py` | Stage-tipping linear actuator (GPIO 16 / 26) | `.venv/bin/python actuator.py dump` |
