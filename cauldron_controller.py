@@ -109,7 +109,7 @@ def start_stage_dump() -> None:
     No-op if a dump is already in flight.
     """
     global _dump_thread
-    if _dump_thread is not None and _dump_thread.is_alive():
+    if (_dump_thread is not None) and _dump_thread.is_alive():
         return
     _dump_thread = threading.Thread(target=actuator.dump_stage, daemon=True)
     _dump_thread.start()
@@ -145,7 +145,7 @@ def perform_spell(
     Keeps the "cauldron working" ambience (bubbling SFX + LED strobe) running
     through voice generation so there is no silent gap, then stops it and
     recites. Returns the generated ``{witch: path}`` mapping -- reusable to
-    replay the same lines later without regenerating them, e.g. a repeat
+    replay the same lines later without regenerating them, e.g., a repeat
     gesture -- or None if TTS failed and nothing was recited (never in strict
     mode, where the failure is raised instead).
 
@@ -157,7 +157,7 @@ def perform_spell(
     print(label)
     _start_ambience()
     voices: Mapping[Witch, VoiceProfile] = (
-        VOICES if (paid_voices or not strict) else FREE_VOICES
+        VOICES if (paid_voices or (not strict)) else FREE_VOICES
     )
     try:
         spell_paths = asyncio.run(
@@ -390,7 +390,7 @@ def main(
     last_trigger = 0.0
     try:
         while True:
-            if ir_sensor.beam_broken() and time.time() - last_trigger > DEBOUNCE_SEC:
+            if ir_sensor.beam_broken() and (time.time() - last_trigger > DEBOUNCE_SEC):
                 last_trigger = time.time()
                 if mode == "request":
                     process_requested_spell(

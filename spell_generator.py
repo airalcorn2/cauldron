@@ -194,7 +194,7 @@ class Recipe:
                 order = tuple(Witch(w) for w in raw.get("order", list(Witch)))
         except (KeyError, TypeError, ValueError) as exc:
             raise ValueError(f"malformed recipe response: {raw!r}") from exc
-        if not ingredients:
+        if len(ingredients) == 0:
             raise ValueError("recipe has no ingredients")
         return cls(ingredients, lines, order)
 
@@ -210,9 +210,9 @@ class RoundResult:
 
     @property
     def outcome(self) -> Outcome:
-        if not self.missing:
+        if len(self.missing) == 0:
             return Outcome.SUCCESS
-        if self.found:
+        if len(self.found) > 0:
             return Outcome.PARTIAL
         return Outcome.FAILURE
 
@@ -286,7 +286,7 @@ def request_recipe(ingredient_count: int = 2) -> Recipe:
         lines = {w: raw["lines"][w.value] for w in Witch}
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError(f"malformed recipe response: {raw!r}") from exc
-    if not ingredients:
+    if len(ingredients) == 0:
         raise ValueError("recipe has no ingredients")
     return Recipe(ingredients, lines, order)
 
@@ -310,7 +310,7 @@ def evaluate_tray(recipe: Recipe, image_path: str | Path) -> RoundResult:
     def _is_present(ingredient: Ingredient) -> bool:
         answer = ingredient.answer.lower()
         for seen in present:
-            if answer in seen or seen in answer:
+            if (answer in seen) or (seen in answer):
                 return True
             if any(term in seen for term in ingredient.match_terms):
                 return True
@@ -328,9 +328,19 @@ def generate_outcome_spell(result: RoundResult) -> Spell:
     return _spell_from_prompt(
         prompts.outcome(
             requested=", ".join(i.answer for i in result.recipe.ingredients),
-            found=", ".join(i.answer for i in result.found) or "nothing",
-            missing=", ".join(i.answer for i in result.missing) or "nothing",
-            extras=", ".join(result.extras) or "none",
+            found=(
+                ", ".join(i.answer for i in result.found)
+                if len(result.found) > 0
+                else "nothing"
+            ),
+            missing=(
+                ", ".join(i.answer for i in result.missing)
+                if len(result.missing) > 0
+                else "nothing"
+            ),
+            extras=(
+                ", ".join(result.extras) if len(result.extras) > 0 else "none"
+            ),
             verdict=result.outcome.name,
             order=_order_text(order),
         ),
@@ -480,11 +490,11 @@ def main() -> None:
 
     if args.request:
         _run_request(args.ingredients)
-    elif args.evaluate:
+    elif args.evaluate is not None:
         _run_evaluate(*args.evaluate, with_outcome=False)
-    elif args.outcome:
+    elif args.outcome is not None:
         _run_evaluate(*args.outcome, with_outcome=True)
-    elif args.image:
+    elif args.image is not None:
         _run_story(args.image) if args.story else _run_react(args.image)
     else:
         parser.error("give an image, or use --request / --evaluate / --outcome")

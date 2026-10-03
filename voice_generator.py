@@ -156,7 +156,7 @@ def list_voices() -> None:
     except urllib.error.HTTPError as exc:
         body = exc.read().decode(errors="replace")
         hint = ""
-        if exc.code == 401 and "voices_read" in body:
+        if (exc.code == 401) and ("voices_read" in body):
             hint = (
                 "\n\nYour API key is scoped and lacks 'voices_read'. Add that scope "
                 "to the key (elevenlabs.io -> Settings -> API Keys), use an "
@@ -171,10 +171,10 @@ def list_voices() -> None:
 
 def _lines_from_args(args: argparse.Namespace) -> dict[Witch, str]:
     """Build the ``{witch: line}`` mapping the CLI should synthesize."""
-    if args.spell:
+    if args.spell is not None:
         raw = json.loads(Path(args.spell).read_text())
         return {Witch(key): value for key, value in raw.items()}
-    if args.role:
+    if args.role is not None:
         return {args.role: args.text}
     return {witch: args.text for witch in Witch}
 
@@ -215,7 +215,7 @@ def main() -> None:
     if args.list_voices:
         list_voices()
         return
-    if args.role and not args.text:
+    if (args.role is not None) and (args.text is None):
         parser.error("--role only applies to --text")
 
     lines = _lines_from_args(args)

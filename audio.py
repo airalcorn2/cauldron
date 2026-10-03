@@ -221,7 +221,7 @@ def main() -> None:
         VOICE_VOLUME = args.voice_volume
 
     setup()
-    if args.ambience:
+    if args.ambience is not None:
         print(
             f"Running the bubbling (volume={BUBBLE_VOLUME:g}) + laugh "
             f"(volume={LAUGH_VOLUME:g}) ambience for {args.ambience:g}s."
@@ -229,13 +229,13 @@ def main() -> None:
         start_bubbling()
         time.sleep(args.ambience)
         stop_bubbling()
-    elif args.loop:
+    elif args.loop is not None:
         print(f"Looping {args.path} for {args.loop:g}s.")
         sfx = pygame.mixer.Sound(args.path)
         sfx.play(loops=-1)
         time.sleep(args.loop)
         sfx.stop()
-    elif args.role:
+    elif args.role is not None:
         path = GENERATED_DIR / f"{args.role}.mp3"
         volume = WITCH_VOLUMES[args.role] if args.voice_volume is None else VOICE_VOLUME
         print(f"Playing {path} as {args.role} (voice volume={volume:g}).")

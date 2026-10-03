@@ -72,9 +72,9 @@ def _await_clear(
         if beam_broken(pin):
             last_broken = time.monotonic()
             if (
-                hold is not None
-                and not hold_fired
-                and last_broken - start >= hold
+                (hold is not None)
+                and (not hold_fired)
+                and (last_broken - start >= hold)
             ):
                 hold_fired = True
                 if on_hold is not None:

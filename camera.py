@@ -113,11 +113,11 @@ def sweep_focus(
             ret, frame = cap.read()
             if ret:
                 readings.append(_sharpness(frame))
-        if not readings:
+        if len(readings) == 0:
             continue
         median = statistics.median(readings)
         print(f"focus={focus:2d}  sharpness={median:8.1f}")
-        if best is None or median > best[1]:
+        if (best is None) or (median > best[1]):
             best = (focus, median)
 
     cap.release()
