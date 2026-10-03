@@ -52,6 +52,15 @@ class WitchProfile:
     stability: float
     similarity_boost: float
     style: float
+    # Hand-written mode-select dialogue (see cauldron_controller.py's
+    # _run_mode_selection()): one line asking the mortal to pick a mode,
+    # one line per mode naming that mode's button (keyed by mode name --
+    # "react", "story", "joke", "prophecy", "request", "category"), and one
+    # confirmation line per mode. All cached to disk and never generated
+    # live, so opening mode selection never has to wait on the network.
+    mode_select_intro: str
+    mode_select_options: dict[str, str]
+    mode_select_confirmations: dict[str, str]
     speed: float = 1.0
     use_speaker_boost: bool = True
     # Per-witch playback volume, since some voices render quieter than others
@@ -67,8 +76,9 @@ class WitchProfile:
 
 # The single source of truth for every witch. To add, remove, or restyle a
 # witch, edit this dict (and the Witch enum above); light_control.py's
-# WITCH_COLORS, voice_generator.py's VOICES/FREE_VOICES, and prompts.py's
-# persona text are all derived from it.
+# WITCH_COLORS, voice_generator.py's VOICES/FREE_VOICES, audio.py's
+# WITCH_VOLUMES, prompts.py's persona text, and cauldron_controller.py's
+# MODE_SELECT_INTROS/OPTIONS/CONFIRMATIONS are all derived from it.
 WITCHES: dict[Witch, WitchProfile] = {
     Witch.VIOLET: WitchProfile(
         name="Violet",
@@ -79,6 +89,26 @@ WITCHES: dict[Witch, WitchProfile] = {
         stability=0.5,
         similarity_boost=0.75,
         style=0.35,
+        mode_select_intro=(
+            "Ahh, a mortal seeks to alter the ritual! Behold the six runes "
+            "upon your magic tablet."
+        ),
+        mode_select_options={
+            "react": "Tap the blue rune for a spell.",
+            "story": "Tap the red rune for a story.",
+            "joke": "Tap the yellow rune for a jest.",
+            "prophecy": "Tap the green rune for a prophecy.",
+            "request": "Press the left talon to fetch ingredients.",
+            "category": "Press the right talon for a challenge of properties.",
+        },
+        mode_select_confirmations={
+            "react": "The spell-rune it is. Drop your offering, and I shall weave it into verse.",
+            "story": "The story-rune it is. Let us see what tale your offering tells.",
+            "joke": "The jest-rune it is. Prepare yourself for mirth most wicked.",
+            "prophecy": "The prophecy-rune it is. The omens shall now be read.",
+            "request": "The left talon it is. We shall name our price in ingredients.",
+            "category": "The right talon it is. A riddle of properties awaits you.",
+        },
         speed=0.95,
         volume=0.65,
     ),
@@ -91,6 +121,25 @@ WITCHES: dict[Witch, WitchProfile] = {
         stability=0.45,
         similarity_boost=0.75,
         style=0.45,
+        mode_select_intro=(
+            "Ooh, somebody wants options! Check it, your tablet's got six runes."
+        ),
+        mode_select_options={
+            "react": "Blue's for a spell.",
+            "story": "Red's for a story.",
+            "joke": "Yellow's for a joke.",
+            "prophecy": "Green's for a prophecy.",
+            "request": "Left talon if you wanna fetch stuff.",
+            "category": "Right talon for a challenge.",
+        },
+        mode_select_confirmations={
+            "react": "Spell mode, got it. Toss something in and let's see what magic we cook up.",
+            "story": "Story mode, nice. Let's see what tale your junk tells.",
+            "joke": "Joke mode, hehe. This is gonna be good.",
+            "prophecy": "Prophecy mode, ooh spooky. Let's peek at your future.",
+            "request": "Fetching mode. Get ready, I'm gonna make you work for it.",
+            "category": "Challenge mode. Let's see if you can actually pull this off.",
+        },
         speed=1.0,
         volume=0.65,
     ),
@@ -103,6 +152,26 @@ WITCHES: dict[Witch, WitchProfile] = {
         stability=0.5,
         similarity_boost=0.7,
         style=0.3,
+        mode_select_intro=(
+            "Hmph. Changing the ritual, are we. Six choices on that little "
+            "tablet of yours."
+        ),
+        mode_select_options={
+            "react": "Blue rune, for a spell.",
+            "story": "Red rune, for a story.",
+            "joke": "Yellow rune, for a joke.",
+            "prophecy": "Green rune, for a prophecy.",
+            "request": "Left talon, to fetch ingredients.",
+            "category": "Right talon, for a challenge.",
+        },
+        mode_select_confirmations={
+            "react": "Spell mode. Fine. Give me something to work with.",
+            "story": "Story mode. Hmph. Let's hear what your rubbish has to say.",
+            "joke": "Joke mode. Don't expect it to be gentle.",
+            "prophecy": "Prophecy mode. The future rarely flatters anyone.",
+            "request": "Fetching mode. Go on then, don't keep me waiting.",
+            "category": "Challenge mode. Let's see if you're clever enough.",
+        },
         speed=0.92,
         volume=1.5,  # Renders quieter than Violet/Amber at the same settings.
     ),

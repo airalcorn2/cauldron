@@ -145,6 +145,17 @@ async def generate_all_speech(
     return paths
 
 
+async def generate_to_path(text: str, profile: VoiceProfile, output_path: Path) -> None:
+    """Synthesize one line to an arbitrary path (vs. generate_all_speech()'s
+    fixed ``{witch}.mp3`` naming), for content meant to be cached under its
+    own name rather than overwritten by the next spell -- see
+    cauldron_controller.py's mode-select prompt/confirmation lines.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    async with aiohttp.ClientSession() as session:
+        await _generate_speech(session, text, profile, output_path)
+
+
 def list_voices() -> None:
     """Print every voice this key can address, for populating FREE_VOICES."""
     req = urllib.request.Request(

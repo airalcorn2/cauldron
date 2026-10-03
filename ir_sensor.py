@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import time
 from collections.abc import Callable
+from threading import Event
 
 import RPi.GPIO as GPIO
 
@@ -30,7 +31,9 @@ def beam_broken(pin: int = IR_SENSOR_PIN) -> bool:
     return GPIO.input(pin) == GPIO.LOW
 
 
-def wait_for_quiet(settle: float, pin: int = IR_SENSOR_PIN) -> None:
+def wait_for_quiet(
+    settle: float, pin: int = IR_SENSOR_PIN, *, abort: Event | None = None
+) -> None:
     """Wait until the beam has been clear for ``settle`` continuous seconds.
 
     Call right after a triggering break to give a moment for more objects to
@@ -38,9 +41,15 @@ def wait_for_quiet(settle: float, pin: int = IR_SENSOR_PIN) -> None:
     clock. No timeout: fine for a prop that is watched rather than left fully
     unattended. Call with a deadline of your own (or just interrupt the
     process) if that ever stops being true.
+
+    If ``abort`` is given and becomes set (e.g. a live mode switch), returns
+    immediately -- the caller is expected to check ``abort.is_set()`` itself
+    to tell that apart from a normal, settled return.
     """
     last_broken = time.monotonic()
     while True:
+        if (abort is not None) and abort.is_set():
+            return
         if beam_broken(pin):
             last_broken = time.monotonic()
         if time.monotonic() - last_broken >= settle:
@@ -54,6 +63,7 @@ def _await_clear(
     *,
     hold: float | None = None,
     on_hold: Callable[[], None] | None = None,
+    abort: Event | None = None,
 ) -> float:
     """Block until the beam has been clear for ``debounce`` continuous seconds.
 
@@ -63,12 +73,16 @@ def _await_clear(
 
     If ``hold`` is given, ``on_hold`` fires the instant the obstruction --
     while still ongoing -- reaches that duration, rather than waiting for it
-    to end first.
+    to end first. If ``abort`` becomes set, returns immediately (the elapsed
+    duration so far is returned but is not meaningful -- the caller is
+    expected to check ``abort.is_set()`` itself).
     """
     start = time.monotonic()
     last_broken = start
     hold_fired = False
     while True:
+        if (abort is not None) and abort.is_set():
+            return last_broken - start
         if beam_broken(pin):
             last_broken = time.monotonic()
             if (
@@ -93,6 +107,7 @@ def wait_for_drops(
     on_drop: Callable[[], None] | None = None,
     on_repeat: Callable[[], None] | None = None,
     pin: int = IR_SENSOR_PIN,
+    abort: Event | None = None,
 ) -> None:
     """Wait for items to be dropped in, then for the beam to go quiet.
 
@@ -112,11 +127,17 @@ def wait_for_drops(
     silence ambience before it could possibly turn into a hold, rather than
     leaving it running and only cutting it after the fact. No timeout, for
     the same reason as ``wait_for_quiet``.
+
+    If ``abort`` becomes set (e.g. a live mode switch), returns immediately
+    without calling ``on_drop``/``on_repeat`` for whatever was in progress --
+    the caller is expected to check ``abort.is_set()`` itself.
     """
     started = False
     settled_since: float | None = None
 
     while True:
+        if (abort is not None) and abort.is_set():
+            return
         now = time.monotonic()
         if started:
             if settled_since is None:
@@ -129,8 +150,10 @@ def wait_for_drops(
             if on_obstruct is not None:
                 on_obstruct()
             obstructed = _await_clear(
-                pin, clear_debounce, hold=hold, on_hold=on_repeat
+                pin, clear_debounce, hold=hold, on_hold=on_repeat, abort=abort
             )
+            if (abort is not None) and abort.is_set():
+                return
             if obstructed < hold:
                 started = True
                 if on_drop is not None:

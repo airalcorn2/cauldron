@@ -79,6 +79,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import functools
+import random
 import sys
 import threading
 import time
@@ -89,12 +90,19 @@ import RPi.GPIO as GPIO
 
 import actuator
 import audio
+import controller
 import ir_sensor
 import light_control
 import spell_generator
 from camera import capture_frame
-from voice_generator import FREE_VOICES, VOICES, VoiceProfile, generate_all_speech
-from witches import Witch
+from voice_generator import (
+    FREE_VOICES,
+    VOICES,
+    VoiceProfile,
+    generate_all_speech,
+    generate_to_path,
+)
+from witches import WITCHES, Witch
 
 DEBOUNCE_SEC = 3.0
 
@@ -110,7 +118,81 @@ SETTLE_GAP_SEC = 2.0
 INGREDIENT_COUNT = 2
 HOLD_TO_REPEAT_SEC = 1.2  # Obstruct the beam this long to replay the request.
 
+# Live mode switching via a USB gamepad (see controller.py). The mortal holds
+# Select+Start together to open mode selection; a random witch then asks
+# which mode to pick, naming these buttons in-universe (see
+# MODE_SELECT_OPTIONS below), and the mortal answers by pressing one of them.
+# button_0-3 are this pad's four face buttons, each a distinct physical
+# color (see BUTTON_COLORS); button_4/button_5 are the plain gray shoulder
+# buttons. Remap here if your pad differs.
+MODE_BUTTONS: dict[str, str] = {
+    "button_0": "react",
+    "button_1": "story",
+    "button_2": "joke",
+    "button_3": "prophecy",
+    "button_4": "request",
+    "button_5": "category",
+}
+
+# The ring shows one of these colors while listing/confirming each mode, so
+# the mortal sees a direct match to the button they're looking at. button_0-3
+# are this pad's actual face-button colors -- confirmed by running
+# `.venv/bin/python controller.py` and pressing each one. button_4/button_5
+# (the talons) are physically plain gray, so they're just assigned two more
+# colors here, distinct from the face buttons'.
+BUTTON_COLORS: dict[str, light_control.RGB] = {
+    "button_0": light_control.RGB(30, 90, 255),  # Blue
+    "button_1": light_control.RGB(220, 20, 20),  # Red
+    "button_2": light_control.RGB(230, 200, 0),  # Yellow
+    "button_3": light_control.RGB(60, 200, 40),  # Green
+    "button_4": light_control.RGB(0, 220, 220),  # Cyan
+    "button_5": light_control.RGB(255, 130, 0),  # Orange
+}
+
+# Mode -> ring color, derived from BUTTON_COLORS. Shown steady while that
+# mode's button is being named during the listing, and again during the
+# confirmation if that mode ends up chosen.
+MODE_COLORS: dict[str, light_control.RGB] = {
+    mode: BUTTON_COLORS[button] for button, mode in MODE_BUTTONS.items()
+}
+
+# Select and Start, held together, open mode selection. Confirmed on this pad
+# via `.venv/bin/python controller.py`; remap here if yours differs.
+_SELECT_BUTTON = 8
+_START_BUTTON = 9
+
+# The hand-written mode-select dialogue itself lives on each witch's profile
+# in witches.py (WitchProfile.mode_select_intro/options/confirmations), next
+# to her personality and voice settings rather than duplicated here -- these
+# are just the views this module actually uses.
+MODE_SELECT_INTROS: dict[Witch, str] = {
+    w: p.mode_select_intro for w, p in WITCHES.items()
+}
+MODE_SELECT_OPTIONS: dict[Witch, dict[str, str]] = {
+    w: p.mode_select_options for w, p in WITCHES.items()
+}
+MODE_SELECT_CONFIRMATIONS: dict[Witch, dict[str, str]] = {
+    w: p.mode_select_confirmations for w, p in WITCHES.items()
+}
+
+MODE_SELECT_DIR = Path("generated/mode_select")
+
 _dump_thread: threading.Thread | None = None
+
+# Set by main() to the --mode default, then only ever changed by
+# _run_mode_selection() below. A plain module global is enough: CPython's GIL
+# makes a single assignment atomic, and there is exactly one writer.
+_pending_mode: str = "react"
+
+# Set the instant mode selection opens; cleared by main() right before
+# starting the next round. Threaded into ir_sensor's wait_for_quiet()/
+# wait_for_drops() calls below so an in-progress round's indefinite waits --
+# the only truly unbounded part of a round -- notice and bail out, rather
+# than the switch silently queuing up for whenever the current round would
+# have ended on its own. A short TTS line already in flight is allowed to
+# finish rather than being killed mid-sentence; the next checkpoint after it
+# will catch the abort within a second or two.
+_mode_switch_abort = threading.Event()
 
 
 def _start_ambience() -> None:
@@ -123,6 +205,206 @@ def _stop_ambience() -> None:
     """Stop the bubbling SFX and LED strobe. Safe to call any time."""
     light_control.stop_flicker()
     audio.stop_bubbling()
+
+
+def _mode_select_intro_path(witch: Witch) -> Path:
+    return MODE_SELECT_DIR / f"{witch}_intro.mp3"
+
+
+def _mode_select_option_path(witch: Witch, mode: str) -> Path:
+    return MODE_SELECT_DIR / f"{witch}_option_{mode}.mp3"
+
+
+def _mode_select_confirm_path(witch: Witch, mode: str) -> Path:
+    return MODE_SELECT_DIR / f"{witch}_{mode}.mp3"
+
+
+def _ensure_mode_select_cache() -> None:
+    """Synthesize any missing mode-select voice lines, so selection is instant.
+
+    Called once from main(), before the trigger loop starts, if a gamepad is
+    connected. The 39 lines (3 intros + 18 options + 18 confirmations)
+    essentially never change once written, so a normal run just confirms the
+    cache is complete and does nothing.
+    """
+    missing: list[tuple[str, VoiceProfile, Path]] = []
+    for witch in Witch:
+        intro_path = _mode_select_intro_path(witch)
+        if not intro_path.exists():
+            missing.append((MODE_SELECT_INTROS[witch], VOICES[witch], intro_path))
+        for mode, text in MODE_SELECT_OPTIONS[witch].items():
+            option_path = _mode_select_option_path(witch, mode)
+            if not option_path.exists():
+                missing.append((text, VOICES[witch], option_path))
+        for mode, text in MODE_SELECT_CONFIRMATIONS[witch].items():
+            confirm_path = _mode_select_confirm_path(witch, mode)
+            if not confirm_path.exists():
+                missing.append((text, VOICES[witch], confirm_path))
+
+    if len(missing) == 0:
+        return
+    print(f"Synthesizing {len(missing)} mode-select voice line(s).")
+
+    async def _generate_all() -> None:
+        # Sequential, not gathered: ElevenLabs' concurrent-request limit
+        # (even on paid tiers) rejects many requests fired at once with a
+        # 429. This only runs once, to fill a cold cache, so there's no
+        # latency pressure to parallelize it.
+        for text, profile, path in missing:
+            await generate_to_path(text, profile, path)
+
+    asyncio.run(_generate_all())
+    print("Mode-select cache ready.")
+
+
+def _wait_for_mode_selection(witch: Witch) -> str:
+    """Block until the mortal presses one of the six mode buttons.
+
+    Meanwhile, left/right on the D-pad (not itself one of the mode
+    buttons -- see MODE_BUTTONS) lets the mortal browse back through the
+    list: each press moves the cursor one mode over and replays that
+    mode's option line, in case they missed it or forgot which button went
+    with which mode. A further left/right press, or a mode button, cuts a
+    still-playing repeat short rather than waiting for it to finish -- same
+    as during the initial listing (see audio.play_file's ``should_stop``).
+    The ring shows the rainbow sweep (see light_control.start_rainbow())
+    whenever genuinely idle -- waiting for the first press, or again after
+    a repeat finishes with nothing queued up next -- and a mode's fixed
+    color only while that mode's line is actually playing.
+
+    No timeout, same as the rest of the prop's waits (see
+    ir_sensor.wait_for_drops()) -- the mortal takes as long as they like.
+    """
+    modes = list(MODE_BUTTONS.values())
+    index = 0
+    selected: str | None = None
+    nav: str | None = None
+
+    def check_input() -> bool:
+        nonlocal selected, nav
+        pressed = controller.poll_pressed()
+        if pressed is not None:
+            mode = MODE_BUTTONS.get(pressed)
+            if mode is not None:
+                selected = mode
+            elif pressed in ("left", "right"):
+                nav = pressed
+        return (selected is not None) or (nav is not None)
+
+    light_control.start_rainbow()
+    while True:
+        if selected is not None:
+            light_control.stop_rainbow()
+            return selected
+        if nav is None:
+            if not check_input():
+                time.sleep(0.02)
+                continue
+            if selected is not None:
+                light_control.stop_rainbow()
+                return selected
+
+        light_control.stop_rainbow()
+        index = (index + (1 if nav == "right" else -1)) % len(modes)
+        nav = None
+        light_control.set_leds(MODE_COLORS[modes[index]])
+        audio.play_file(
+            _mode_select_option_path(witch, modes[index]),
+            volume=audio.WITCH_VOLUMES[witch],
+            should_stop=check_input,
+        )
+        if (selected is None) and (nav is None):
+            light_control.start_rainbow()
+
+
+def _run_mode_selection() -> None:
+    """Select+Start detected: ask a random witch which mode to pick, wait for
+    the mortal's answer, then have that same witch confirm it with the ring
+    held in the new mode's color for the duration of the confirmation line.
+
+    The idle rainbow (see main()) is already running when the combo is
+    pressed, so the intro just continues it uninterrupted; it switches to
+    each mode's own fixed color as that mode's button is named (one option
+    line per mode -- see MODE_SELECT_OPTIONS), pausing on it for exactly
+    that line's duration before moving to the next. Holds steady on just
+    the chosen one during the confirmation, then resumes the idle rainbow
+    once selection is done. The mortal doesn't have to wait out the intro
+    or listing, though -- pressing a mode button at any point cuts the
+    current line short (see audio.play_file's ``should_stop``) and jumps
+    straight to that mode's confirmation. Runs on the controller-watching
+    thread and blocks it for as long as selection takes -- fine, since
+    watching for the combo is all that thread does otherwise. Sets
+    _mode_switch_abort first, so an in-progress round's indefinite waits
+    notice and bail out.
+    """
+    global _pending_mode
+    print("Controller: mode-select combo pressed.")
+    _mode_switch_abort.set()
+    _stop_ambience()
+
+    witch = random.choice(list(Witch))
+    selected: str | None = None
+
+    def check_early_press() -> bool:
+        nonlocal selected
+        pressed = controller.poll_pressed()
+        if pressed is not None:
+            mode = MODE_BUTTONS.get(pressed)
+            if mode is not None:
+                selected = mode
+        return selected is not None
+
+    light_control.start_rainbow()
+    audio.play_file(
+        _mode_select_intro_path(witch),
+        volume=audio.WITCH_VOLUMES[witch],
+        should_stop=check_early_press,
+    )
+    light_control.stop_rainbow()
+
+    if selected is None:
+        for mode in MODE_BUTTONS.values():
+            light_control.set_leds(MODE_COLORS[mode])
+            audio.play_file(
+                _mode_select_option_path(witch, mode),
+                volume=audio.WITCH_VOLUMES[witch],
+                should_stop=check_early_press,
+            )
+            if selected is not None:
+                break
+        light_control.leds_off()
+
+    if selected is None:
+        selected = _wait_for_mode_selection(witch)
+    _pending_mode = selected
+
+    light_control.set_leds(MODE_COLORS[selected])
+    audio.play_file(
+        _mode_select_confirm_path(witch, selected), volume=audio.WITCH_VOLUMES[witch]
+    )
+    light_control.leds_off()
+    light_control.start_rainbow()  # Back to idle.
+    print(f"Controller: switched to {selected} mode.")
+
+
+def _watch_controller() -> None:
+    """Background thread: watch for the Select+Start combo and open mode
+    selection the instant both are held together.
+
+    Runs for the life of the process (daemon thread, started once from
+    main() if a gamepad is connected). Edge-triggers on the transition into
+    "both held" so holding the combo doesn't repeat-fire selection.
+    """
+    combo_was_held = False
+    while True:
+        controller.poll_pressed()  # Drain the event queue; is_held() needs it pumped.
+        is_held = controller.is_held(_SELECT_BUTTON) and controller.is_held(
+            _START_BUTTON
+        )
+        if is_held and (not combo_was_held):
+            _run_mode_selection()
+        combo_was_held = is_held
+        time.sleep(0.02)
 
 
 def start_stage_dump() -> None:
@@ -245,7 +527,10 @@ def process_spooky_spell(
     _start_ambience()
 
     try:
-        ir_sensor.wait_for_quiet(SETTLE_GAP_SEC)
+        ir_sensor.wait_for_quiet(SETTLE_GAP_SEC, abort=_mode_switch_abort)
+        if _mode_switch_abort.is_set():
+            print("Round interrupted by mode switch.\n")
+            return
         wait_for_stage_dump()
         img_path = capture_frame()
         if img_path is None:
@@ -289,6 +574,9 @@ def _wait_for_drop_then_capture(
 
     Leaves the ambience running: the caller's next perform_spell() stops it for
     the recitation, so there is no silent gap while the outcome voices render.
+    Also returns None (silently -- no "camera failed" message) if a live mode
+    switch interrupted the wait; the caller tells the two apart by checking
+    _mode_switch_abort itself.
     """
 
     def on_repeat() -> None:
@@ -300,7 +588,10 @@ def _wait_for_drop_then_capture(
         on_obstruct=_stop_ambience,
         on_drop=_start_ambience,
         on_repeat=on_repeat,
+        abort=_mode_switch_abort,
     )
+    if _mode_switch_abort.is_set():
+        return None
     wait_for_stage_dump()
     img_path = capture_frame()
     if img_path is None:
@@ -393,7 +684,10 @@ def process_requested_spell(
             return  # TTS fell back; end the round.
 
         result = _evaluate_attempt(recipe, spell_paths, strict=strict)
-        if result is None:  # The camera or the model failed; nothing to grade.
+        if result is None:  # Camera/model failed, or a mode switch interrupted it.
+            if _mode_switch_abort.is_set():
+                print("Round interrupted by mode switch.\n")
+                return
             _stop_ambience()  # Clear the ring for the cue.
             light_control.fizzle()
             print("Round complete: evaluation failed.\n")
@@ -457,7 +751,10 @@ def process_category_challenge(*, strict: bool, paid_voices: bool = False) -> No
             return  # TTS fell back; end the round.
 
         result = _evaluate_category_attempt(challenge, spell_paths, strict=strict)
-        if result is None:  # The camera or the model failed; nothing to grade.
+        if result is None:  # Camera/model failed, or a mode switch interrupted it.
+            if _mode_switch_abort.is_set():
+                print("Round interrupted by mode switch.\n")
+                return
             _stop_ambience()  # Clear the ring for the cue.
             light_control.fizzle()
             print("Round complete: evaluation failed.\n")
@@ -498,40 +795,51 @@ def main(
     paid_voices: bool = False,
 ) -> None:
     """Set up the hardware, then run the trigger loop (or one round for ``once``)."""
+    global _pending_mode
     ir_sensor.setup()
     light_control.setup()
     audio.setup()
     actuator.setup()
+    _pending_mode = mode
+
+    if controller.setup():
+        _ensure_mode_select_cache()
+        threading.Thread(target=_watch_controller, daemon=True).start()
+        print("Live mode switching enabled via the USB gamepad.")
 
     prefix = "Smoke test. " if once else ""
     print(f"{prefix}Cauldron ready in {mode} mode. Break the beam to begin.")
 
     last_trigger = 0.0
+    light_control.start_rainbow()
     try:
         while True:
             if ir_sensor.beam_broken() and (time.time() - last_trigger > DEBOUNCE_SEC):
                 last_trigger = time.time()
-                if mode == "request":
+                light_control.stop_rainbow()
+                _mode_switch_abort.clear()
+                active_mode = _pending_mode
+                if active_mode == "request":
                     process_requested_spell(
                         strict=once,
                         ingredient_count=ingredient_count,
                         paid_voices=paid_voices,
                     )
-                elif mode == "category":
+                elif active_mode == "category":
                     process_category_challenge(strict=once, paid_voices=paid_voices)
-                elif mode == "story":
+                elif active_mode == "story":
                     process_spooky_spell(
                         strict=once,
                         paid_voices=paid_voices,
                         generate=spell_generator.generate_story_from_image,
                     )
-                elif mode == "joke":
+                elif active_mode == "joke":
                     process_spooky_spell(
                         strict=once,
                         paid_voices=paid_voices,
                         generate=spell_generator.generate_joke_from_image,
                     )
-                elif mode == "prophecy":
+                elif active_mode == "prophecy":
                     process_spooky_spell(
                         strict=once,
                         paid_voices=paid_voices,
@@ -539,9 +847,10 @@ def main(
                     )
                 else:
                     process_spooky_spell(strict=once, paid_voices=paid_voices)
-                if once:
+                if once and (not _mode_switch_abort.is_set()):
                     print("Smoke test PASSED.")
                     return
+                light_control.start_rainbow()
 
             time.sleep(0.05)
 
@@ -550,7 +859,7 @@ def main(
 
     finally:
         wait_for_stage_dump()  # Don't cut power to the motor mid-stroke.
-        light_control.leds_off()
+        light_control.stop_rainbow()
         GPIO.cleanup()
 
 

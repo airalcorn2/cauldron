@@ -17,6 +17,7 @@ membership.
 from __future__ import annotations
 
 import argparse
+import colorsys
 import threading
 import time
 from dataclasses import dataclass
@@ -86,6 +87,8 @@ _FLICKER_COLORS: tuple[RGB, ...] = tuple(WITCH_COLORS.values())
 _strip: PixelStrip | None = None
 _flicker_thread: threading.Thread | None = None
 _flicker_stop: threading.Event | None = None
+_rainbow_thread: threading.Thread | None = None
+_rainbow_stop: threading.Event | None = None
 
 
 def setup() -> None:
@@ -170,6 +173,59 @@ def stop_flicker() -> None:
     _flicker_stop.set()
     _flicker_thread.join(timeout=2)
     _flicker_thread = _flicker_stop = None
+    leds_off()
+
+
+def start_rainbow(interval: float = 0.03, step: float = 0.015) -> None:
+    """Spin a full rainbow gradient around the ring on a background thread
+    until stop_rainbow() is called.
+
+    Unlike start_flicker() (which fills the whole ring with one color at a
+    time), every pixel gets its own hue, spread evenly around the ring, so
+    the full color wheel is visible at once; each tick rotates every pixel's
+    hue forward by ``step``, so the gradient visibly chases around the ring
+    rather than just shifting color in place.
+
+    Used as an opening flourish when mode selection begins (see
+    cauldron_controller.py), before the ring settles onto each mode's own
+    fixed color. Idempotent -- a second call while already running does
+    nothing.
+    """
+    global _rainbow_thread, _rainbow_stop
+    if _rainbow_thread is not None:
+        return
+    stop = threading.Event()
+    _rainbow_stop = stop
+
+    def _run() -> None:
+        offset = 0.0
+        while not stop.is_set():
+            if _strip is not None:
+                count = _strip.numPixels()
+                for i in range(count):
+                    hue = (offset + i / count) % 1.0
+                    r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+                    _strip.setPixelColor(
+                        i, Color(round(r * 255), round(g * 255), round(b * 255))
+                    )
+                _strip.show()
+            offset = (offset + step) % 1.0
+            stop.wait(interval)
+        leds_off()
+
+    _rainbow_thread = threading.Thread(target=_run, daemon=True)
+    _rainbow_thread.start()
+
+
+def stop_rainbow() -> None:
+    """Stop the background rainbow sweep and blank the ring. Safe to call any time."""
+    global _rainbow_thread, _rainbow_stop
+    if _rainbow_thread is None:
+        return
+    assert _rainbow_stop is not None  # Set together with _rainbow_thread.
+    _rainbow_stop.set()
+    _rainbow_thread.join(timeout=2)
+    _rainbow_thread = _rainbow_stop = None
     leds_off()
 
 

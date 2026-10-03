@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pygame
@@ -94,14 +95,26 @@ def start_bubbling() -> None:
 def stop_bubbling() -> None:
     """Stop the bubbling loop and any still-playing laugh.
 
-    Safe to call even if neither ever started.
+    Safe to call even if neither ever started, or if the mixer is currently
+    quit -- play_file() releases it for the duration of each TTS line (see
+    its docstring), and a mode-switch button press can land in that window.
+    There is nothing playing to stop in that case anyway: quitting the mixer
+    already silences everything.
     """
+    if pygame.mixer.get_init() is None:
+        return
     _bubble().stop()
     _laugh().stop()
 
 
+_INTERRUPT_POLL_SEC = 0.02
+
+
 def play_file(
-    path: str | Path, blocking: bool = True, volume: float | None = None
+    path: str | Path,
+    blocking: bool = True,
+    volume: float | None = None,
+    should_stop: Callable[[], bool] | None = None,
 ) -> None:
     """Play an mp3 (via mpg123) or wav (via aplay).
 
@@ -123,6 +136,13 @@ def play_file(
     used -- see cauldron_controller.recite_spell), the mixer is released for
     the duration of playback and reopened after. There is no live ambience to
     interrupt: the controller always stops bubbling before reciting.
+
+    ``should_stop``, if given (only meaningful with ``blocking``), is polled
+    every 20ms while the line plays; the instant it returns True, the player
+    is killed and this returns early rather than waiting out the rest of the
+    line. Used by cauldron_controller's mode-select listing, so a mortal
+    pressing a mode button early doesn't have to sit through the rest of the
+    witch's sentence first.
     """
     path = Path(path)
     if volume is None:
@@ -142,7 +162,23 @@ def play_file(
     if was_init:
         pygame.mixer.quit()
     try:
-        subprocess.run(cmd, check=True)
+        if should_stop is None:
+            subprocess.run(cmd, check=True)
+        else:
+            process = subprocess.Popen(cmd)
+            interrupted = False
+            while process.poll() is None:
+                if should_stop():
+                    interrupted = True
+                    process.terminate()
+                    try:
+                        process.wait(timeout=1)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    break
+                time.sleep(_INTERRUPT_POLL_SEC)
+            if (not interrupted) and (process.returncode != 0):
+                raise subprocess.CalledProcessError(process.returncode, cmd)
     finally:
         if was_init:
             pygame.mixer.init()
