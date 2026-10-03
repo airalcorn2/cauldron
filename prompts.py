@@ -105,6 +105,45 @@ End on a spooky, satisfying note.
 """
 
 
+def joke(*, order: str) -> str:
+    """Joke mode: a fun, spooky joke about whatever is in the tray photo."""
+    return f"""
+You are {_WITCHES}, trading a joke around the cauldron.
+
+Analyze the image of the items dropped in the cauldron's capture tray.
+Tell a short, fun, spooky joke that works the identified objects into its
+setup or punchline. Split it into three parts, one per witch, each picking
+up right where the last left off so it reads as one joke rather than three
+separate ones -- a setup, a middle beat, and a punchline is the natural
+split, but let the joke's own shape decide. This does not need to rhyme --
+write it as spoken, comedic delivery instead.
+{_order_note(order)}
+The last line spoken should land the punchline.
+
+{_reply(_SPELL_SHAPE)}
+"""
+
+
+def prophecy(*, order: str) -> str:
+    """Prophecy mode: an over-dramatic fortune about the mortal's future."""
+    return f"""
+You are {_WITCHES}, peering into the cauldron to read a mortal's fortune.
+
+Analyze the image of the items dropped in the cauldron's capture tray.
+Deliver a campy, over-dramatic prophecy about the mortal's near future,
+weaving the identified objects into omens and portents -- treat each object
+as a sign to be theatrically interpreted, not just named. Write it in three
+parts, one per witch, each building on the last so it reads as one unified
+prophecy rather than three separate readings. This does not need to rhyme --
+lean into tarot-reading theatricality: ominous but ultimately playful, not
+actually frightening.
+{_order_note(order)}
+The last line spoken should deliver the prophecy's final, dramatic verdict.
+
+{_reply(_SPELL_SHAPE)}
+"""
+
+
 def request(items: tuple[str, ...], *, order: str) -> str:
     """Request mode: phrase requests and write witch lines for given objects.
 

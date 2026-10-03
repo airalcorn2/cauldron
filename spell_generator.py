@@ -8,6 +8,14 @@ Story mode -- a short spooky story about whatever is in the tray:
 
     .venv/bin/python spell_generator.py test.jpg --story
 
+Joke mode -- a fun, spooky joke about whatever is in the tray:
+
+    .venv/bin/python spell_generator.py test.jpg --joke
+
+Prophecy mode -- a campy, over-dramatic fortune about whatever is in the tray:
+
+    .venv/bin/python spell_generator.py test.jpg --prophecy
+
 Request mode helpers:
 
     .venv/bin/python spell_generator.py --request [--ingredients 2]   # Invent a recipe.
@@ -268,6 +276,24 @@ def generate_story_from_image(image_path: str | Path) -> Spell:
     return Spell.from_api_json(_generate_json([part, prompt], "story"), order)
 
 
+def generate_joke_from_image(image_path: str | Path) -> Spell:
+    """Joke mode: a fun, spooky joke about the items in a tray photo."""
+    image_data = Path(image_path).read_bytes()
+    part = types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+    order = _random_order()
+    prompt = prompts.joke(order=_order_text(order))
+    return Spell.from_api_json(_generate_json([part, prompt], "joke"), order)
+
+
+def generate_prophecy_from_image(image_path: str | Path) -> Spell:
+    """Prophecy mode: a campy, over-dramatic fortune about the tray's items."""
+    image_data = Path(image_path).read_bytes()
+    part = types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+    order = _random_order()
+    prompt = prompts.prophecy(order=_order_text(order))
+    return Spell.from_api_json(_generate_json([part, prompt], "prophecy"), order)
+
+
 def request_recipe(ingredient_count: int = 2) -> Recipe:
     """Sample objects from the curated pool and ask the model to phrase them.
 
@@ -432,6 +458,16 @@ def _run_story(image: str) -> None:
         print(f"{witch}: {line}")
 
 
+def _run_joke(image: str) -> None:
+    for witch, line in generate_joke_from_image(image):
+        print(f"{witch}: {line}")
+
+
+def _run_prophecy(image: str) -> None:
+    for witch, line in generate_prophecy_from_image(image):
+        print(f"{witch}: {line}")
+
+
 def _run_request(ingredient_count: int) -> None:
     print(json.dumps(request_recipe(ingredient_count).to_dict(), indent=2))
 
@@ -451,17 +487,34 @@ def _run_evaluate(recipe_json: str, image: str, *, with_outcome: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a spell (react mode), a story (story mode), or a "
-        "recipe (request mode)."
+        description="Generate a spell (react mode), a story (story mode), a "
+        "joke (joke mode), a prophecy (prophecy mode), or a recipe "
+        "(request mode)."
     )
     parser.add_argument(
-        "image", nargs="?", help="React/story mode: JPEG of the tray to spell/tell about."
+        "image",
+        nargs="?",
+        help="React/story/joke/prophecy mode: JPEG of the tray to spell/tell/"
+        "joke/divine about.",
     )
-    parser.add_argument(
+    flavor = parser.add_mutually_exclusive_group()
+    flavor.add_argument(
         "--story",
         action="store_true",
         help="With an image: tell a short spooky story instead of a rhyming "
         "spell (story mode).",
+    )
+    flavor.add_argument(
+        "--joke",
+        action="store_true",
+        help="With an image: tell a fun, spooky joke instead of a rhyming "
+        "spell (joke mode).",
+    )
+    flavor.add_argument(
+        "--prophecy",
+        action="store_true",
+        help="With an image: deliver a campy, over-dramatic fortune instead "
+        "of a rhyming spell (prophecy mode).",
     )
     parser.add_argument(
         "--request",
@@ -495,7 +548,14 @@ def main() -> None:
     elif args.outcome is not None:
         _run_evaluate(*args.outcome, with_outcome=True)
     elif args.image is not None:
-        _run_story(args.image) if args.story else _run_react(args.image)
+        if args.story:
+            _run_story(args.image)
+        elif args.joke:
+            _run_joke(args.image)
+        elif args.prophecy:
+            _run_prophecy(args.image)
+        else:
+            _run_react(args.image)
     else:
         parser.error("give an image, or use --request / --evaluate / --outcome")
 

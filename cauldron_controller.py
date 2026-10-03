@@ -1,6 +1,6 @@
 """Interactive Halloween cauldron controller.
 
-Three modes, selected with ``--mode``:
+Five modes, selected with ``--mode``:
 
   react (default)
     IR beam broken -> bubbling SFX and LED strobe -> a pause for the beam to
@@ -16,6 +16,17 @@ Three modes, selected with ``--mode``:
     in three parts (one per witch) that continue one another. See
     process_spooky_spell()'s ``generate`` parameter -- the two modes share
     every stage except what they ask the model for.
+
+  joke
+    Identical pipeline to react, but the vision model is asked for a fun,
+    spooky joke about the tray's items instead of a rhyming spell, again
+    split three ways (one per witch) into one joke rather than three.
+
+  prophecy
+    Identical pipeline to react, but the vision model is asked for a campy,
+    over-dramatic fortune about the mortal's future, reading the tray's
+    items as omens, again split three ways (one per witch) into one
+    prophecy rather than three.
 
   request
     IR beam broken -> the witches announce a recipe of objects to fetch ->
@@ -43,6 +54,8 @@ spell_generator.py, voice_generator.py, and actuator.py.
     .venv/bin/python cauldron_controller.py                  # React mode, looping.
     .venv/bin/python cauldron_controller.py --mode request   # Request mode, looping.
     .venv/bin/python cauldron_controller.py --mode story     # Story mode, looping.
+    .venv/bin/python cauldron_controller.py --mode joke      # Joke mode, looping.
+    .venv/bin/python cauldron_controller.py --mode prophecy  # Prophecy mode, looping.
     .venv/bin/python cauldron_controller.py --once           # One round, then exit (smoke test).
     .venv/bin/python cauldron_controller.py --once --paid-voices  # ...with the real premium voices.
 
@@ -404,6 +417,18 @@ def main(
                         paid_voices=paid_voices,
                         generate=spell_generator.generate_story_from_image,
                     )
+                elif mode == "joke":
+                    process_spooky_spell(
+                        strict=once,
+                        paid_voices=paid_voices,
+                        generate=spell_generator.generate_joke_from_image,
+                    )
+                elif mode == "prophecy":
+                    process_spooky_spell(
+                        strict=once,
+                        paid_voices=paid_voices,
+                        generate=spell_generator.generate_prophecy_from_image,
+                    )
                 else:
                     process_spooky_spell(strict=once, paid_voices=paid_voices)
                 if once:
@@ -427,11 +452,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mode",
-        choices=("react", "request", "story"),
+        choices=("react", "request", "story", "joke", "prophecy"),
         default="react",
         help="react: spell about whatever is dropped. request: the witches name "
         "ingredients to fetch. story: a short spooky story about whatever is "
-        "dropped (default: react).",
+        "dropped. joke: a fun, spooky joke about whatever is dropped. "
+        "prophecy: a campy, over-dramatic fortune about whatever is dropped "
+        "(default: react).",
     )
     parser.add_argument(
         "--once",

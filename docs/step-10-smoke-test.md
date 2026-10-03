@@ -10,11 +10,13 @@ It waits for a single beam break, then runs the whole sequence once: flash the l
 Each stage prints as it runs.
 The normal loop logs a failed stage and waits for the next trigger, but `--once` aborts on any failure and exits non-zero, so the broken component is obvious.
 
-To smoke-test request mode, add `--mode request`; for story mode, add `--mode story`:
+To smoke-test request mode, add `--mode request`; for story, joke, or prophecy mode, add `--mode story`, `--mode joke`, or `--mode prophecy`:
 
 ```bash
 .venv/bin/python cauldron_controller.py --once --mode request
 .venv/bin/python cauldron_controller.py --once --mode story
+.venv/bin/python cauldron_controller.py --once --mode joke
+.venv/bin/python cauldron_controller.py --once --mode prophecy
 ```
 
 The stages of request mode can also be exercised individually:
@@ -30,6 +32,8 @@ Once it passes, run the installation loop in whichever mode you want:
 .venv/bin/python cauldron_controller.py                 # React mode.
 .venv/bin/python cauldron_controller.py --mode request  # Request mode.
 .venv/bin/python cauldron_controller.py --mode story     # Story mode.
+.venv/bin/python cauldron_controller.py --mode joke      # Joke mode.
+.venv/bin/python cauldron_controller.py --mode prophecy  # Prophecy mode.
 ```
 
 [← Previous: Step 9: Testing the Stage Actuator](step-9-stage-actuator.md) · [↑ Back to README](../README.md)
