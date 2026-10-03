@@ -44,7 +44,6 @@ class RGB:
 
 
 BLACK = RGB(0, 0, 0)
-ACK = RGB(200, 160, 60)  # Warm amber blip acknowledging a drop.
 GREEN = RGB(60, 200, 40)  # Success shimmer.
 RED = RGB(220, 20, 20)  # Failure fade.
 
@@ -120,13 +119,6 @@ def set_brightness(value: int) -> None:
 def leds_off() -> None:
     """Blank the ring."""
     set_leds(BLACK)
-
-
-def tick(color: RGB = ACK, duration: float = 0.12) -> None:
-    """Brief single-color blip to acknowledge a drop, then blank."""
-    set_leds(color)
-    time.sleep(duration)
-    leds_off()
 
 
 def celebrate(cycles: int = 6, interval: float = 0.12) -> None:

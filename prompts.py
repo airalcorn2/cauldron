@@ -38,7 +38,7 @@ _SPELL_SHAPE = "{" + ", ".join(f'"{w}": "..."' for w in Witch) + "}"
 
 _RECIPE_SHAPE = f"""{{
   "ingredients": [
-    {{"prompt": "the request text or riddle", "answer": "the plain object name",
+    {{"prompt": "the request text or riddle",
      "match_terms": ["keyword", "keyword"], "style": "explicit or riddle"}}
   ],
   "lines": {_SPELL_SHAPE}
@@ -105,26 +105,27 @@ End on a spooky, satisfying note.
 """
 
 
-def request(count: int, *, inspiration: str, order: str) -> str:
-    """Request mode: invent a recipe of objects plus the witch lines.
+def request(items: tuple[str, ...], *, order: str) -> str:
+    """Request mode: phrase requests and write witch lines for given objects.
 
-    ``inspiration`` is a random angle to draw from, there only to keep
-    successive rounds from repeating.
+    ``items`` are the exact objects to ask for, chosen ahead of time from a
+    curated pool rather than invented here -- the model's job is purely the
+    phrasing (style and wording), not picking what to ask for.
     """
+    items_text = "\n".join(f'- "{item}"' for item in items)
     return f"""
-You are {_WITCHES}, deciding what a mortal must throw into the cauldron.
-Invent {count} small, ordinary objects a trick-or-treater could plausibly find
-nearby. For fresh ideas this round, picture rummaging through: {inspiration}.
-Do not feel bound to it; just let it pull you away from the obvious.
+You are {_WITCHES}, deciding how to ask a mortal to fetch these exact objects:
+{items_text}
 
 Give each object a "style":
   - "explicit": the request names the object plainly.
   - "riddle": the request is a short riddle whose answer is the object; the
     object itself is never named.
-Use a mix when {count} is more than one.
+Use a mix when there is more than one object.
+List the ingredients in the same order given above.
 
 Then write three short rhyming lines, one per witch, that together ask the
-mortal to bring all {count} objects. Riddled objects stay riddles in the lines.
+mortal to bring all {len(items)} objects. Riddled objects stay riddles in the lines.
 {_order_note(order)}
 
 {_reply(_RECIPE_SHAPE)}
@@ -152,10 +153,9 @@ def outcome(
     missing: str,
     extras: str,
     verdict: str,
-    final: bool,
     order: str,
 ) -> str:
-    """Request mode: the witches' reaction spell, keyed to the verdict."""
+    """Request mode: the witches' one-shot reaction spell, keyed to the verdict."""
     return f"""
 You are {_WITCHES}, reacting to what the mortal brought.
 
@@ -164,29 +164,14 @@ Brought:   {found}
 Missing:   {missing}
 Extras:    {extras}
 Verdict:   {verdict}
-Final attempt: {final}
 
 Write a short three-line rhyming spell, one line per witch, reacting to the
 verdict. On SUCCESS be triumphant and let the potion work. On PARTIAL the brew
 is weak or half-formed. On FAILURE mock the mortal and let the spell backfire
-comically. If this was the final attempt, make it conclusive.
+comically. The mortal gets one chance, win or lose, so make it conclusive
+either way.
 {_order_note(order)}
 
 {_reply(_SPELL_SHAPE)}
 """
 
-
-def hint(*, missing: str, extras_note: str, order: str) -> str:
-    """Request mode: goading lines between retries, nudging toward the misses."""
-    return f"""
-You are {_WITCHES}, growing impatient. The mortal still owes you:
-{missing}
-{extras_note}
-
-Write three short taunting lines, one per witch, nudging them toward what is
-still missing. If a missing item was a riddle, keep it a riddle and do not name
-it. Playful, not cruel.
-{_order_note(order)}
-
-{_reply(_SPELL_SHAPE)}
-"""

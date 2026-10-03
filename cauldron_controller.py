@@ -19,10 +19,12 @@ Three modes, selected with ``--mode``:
 
   request
     IR beam broken -> the witches announce a recipe of objects to fetch ->
-    the mortal drops items (each pass of the beam is counted; holding the beam
-    obstructed replays the request) -> photo, then the stage tips to dump the
-    items -> the model checks the tray -> success / retry with a hint / final
-    failure, each with its own outcome spell and lighting.
+    the mortal drops items in (holding the beam instead replays the request,
+    recognized throughout the wait -- see _evaluate_attempt) -> photo, once
+    the beam goes quiet, then the stage tips to dump the items -> the model
+    checks the tray, one attempt only -> a triumphant spell and a green
+    shimmer on success, or a comedic curse and a red fizzle on anything
+    less.
 
 The bubbling SFX and LED strobe cover every wait on a slow API call, and
 perform_spell() stops them immediately before the witches recite.
@@ -74,18 +76,16 @@ from witches import Witch
 
 DEBOUNCE_SEC = 3.0
 
-# Shared: once triggered, how long to wait for the beam to go quiet before
-# acting on the tray, so a second item dropped in right after the first one
-# still makes it into the shot. React mode uses SETTLE_TIMEOUT_SEC as a hard
-# cap on that wait; request mode's own cap is COLLECTION_TIMEOUT_SEC below.
+# Shared: once triggered, how long the beam must stay clear before acting on
+# the tray, so a second item dropped in right after the first one still makes
+# it into the shot. React mode calls wait_for_quiet() right after its
+# triggering break; request mode calls wait_for_drops() instead (see
+# _evaluate_attempt), since there the mortal hasn't dropped anything yet when
+# the wait starts, and it also needs to recognize the hold-to-repeat gesture.
 SETTLE_GAP_SEC = 2.0
-SETTLE_TIMEOUT_SEC = 10.0
 
 # Request-mode tuning.
 INGREDIENT_COUNT = 2
-MAX_RETRIES = 2  # Extra attempts after the first, so three tries by default.
-COLLECTION_TIMEOUT_SEC = 45.0
-IDLE_TIMEOUT_SEC = 20.0
 HOLD_TO_REPEAT_SEC = 1.2  # Obstruct the beam this long to replay the request.
 
 _dump_thread: threading.Thread | None = None
@@ -139,13 +139,15 @@ def perform_spell(
     strict: bool,
     paid_voices: bool = False,
     label: str = "Generating witch voices.",
-) -> bool:
+) -> dict[Witch, Path] | None:
     """Synthesize a spell's three lines and recite them.
 
     Keeps the "cauldron working" ambience (bubbling SFX + LED strobe) running
     through voice generation so there is no silent gap, then stops it and
-    recites. Returns False if TTS failed and nothing was recited (never in
-    strict mode, where the failure is raised).
+    recites. Returns the generated ``{witch: path}`` mapping -- reusable to
+    replay the same lines later without regenerating them, e.g. a repeat
+    gesture -- or None if TTS failed and nothing was recited (never in strict
+    mode, where the failure is raised instead).
 
     The live show (``strict=False``) always uses the premium voices. The
     ``--once`` smoke test defaults to the free voices to avoid spending
@@ -166,11 +168,11 @@ def perform_spell(
             raise
         print(f"TTS error: {exc}")
         _stop_ambience()
-        return False
+        return None
 
     _stop_ambience()
     recite_spell(spell_paths)
-    return True
+    return spell_paths
 
 
 def _voice_reaction(
@@ -221,7 +223,7 @@ def process_spooky_spell(
     _start_ambience()
 
     try:
-        ir_sensor.wait_for_quiet(SETTLE_GAP_SEC, timeout=SETTLE_TIMEOUT_SEC)
+        ir_sensor.wait_for_quiet(SETTLE_GAP_SEC)
         wait_for_stage_dump()
         img_path = capture_frame()
         if img_path is None:
@@ -251,14 +253,35 @@ def process_spooky_spell(
 
 
 def _evaluate_attempt(
-    recipe: spell_generator.Recipe, drops: int, *, strict: bool
+    recipe: spell_generator.Recipe,
+    spell_paths: Mapping[Witch, Path],
+    *,
+    strict: bool,
 ) -> spell_generator.RoundResult | None:
-    """Photograph the tray and score it. None if the camera or model failed.
+    """Wait for the mortal to drop items, then photograph the tray and score it.
+
+    The request was just spoken, so the prop is silent; ambience only starts
+    once a beam break is confirmed to be an item rather than a hold-to-repeat
+    gesture (on_drop), covering the capture/evaluate work that follows. A
+    repeat (on_repeat) just replays ``spell_paths`` (the request
+    announcement's own TTS output, handed in by the caller) and never starts
+    ambience itself -- the next real drop will, same as always, if one
+    follows. Returns None if the camera or model failed.
 
     Leaves the ambience running: the caller's next perform_spell() stops it for
     the recitation, so there is no silent gap while the outcome voices render.
     """
-    _start_ambience()
+
+    def on_repeat() -> None:
+        recite_spell(spell_paths)
+
+    ir_sensor.wait_for_drops(
+        SETTLE_GAP_SEC,
+        hold=HOLD_TO_REPEAT_SEC,
+        on_obstruct=_stop_ambience,
+        on_drop=_start_ambience,
+        on_repeat=on_repeat,
+    )
     wait_for_stage_dump()
     img_path = capture_frame()
     if img_path is None:
@@ -266,7 +289,7 @@ def _evaluate_attempt(
             raise RuntimeError("camera capture failed")
         print("Camera capture failed.")
         return None
-    print(f"Captured {img_path} after {drops} drop(s).")
+    print(f"Captured {img_path}.")
     start_stage_dump()
     try:
         return spell_generator.evaluate_tray(recipe, img_path)
@@ -280,11 +303,14 @@ def _evaluate_attempt(
 def process_requested_spell(
     *,
     strict: bool,
-    retries: int,
     ingredient_count: int,
     paid_voices: bool = False,
 ) -> None:
-    """Request mode: the witches name a recipe and grade what the mortal brings."""
+    """Request mode: the witches name a recipe and grade what the mortal brings.
+
+    One attempt only: whatever is on the tray once the beam settles is what
+    gets graded, win or lose.
+    """
     print("Beam broken. The witches will name their price.")
 
     # Ambience runs from here until perform_spell() stops it for the recitation;
@@ -300,94 +326,47 @@ def process_requested_spell(
             recipe = spell_generator.random_fallback_recipe()
         print(f"Recipe: {recipe.summary()}")
 
-        def on_break(count: int) -> None:
-            print(f"  drop {count}")
-            light_control.tick()
+        spell_paths = perform_spell(
+            recipe.announce(),
+            strict=strict,
+            paid_voices=paid_voices,
+            label="Voicing the request.",
+        )
+        if spell_paths is None:
+            return  # TTS fell back; end the round.
 
-        def on_repeat() -> None:
-            print("  (beam held -- repeating the request)")
-            perform_spell(
-                recipe.announce(),
-                strict=strict,
-                paid_voices=paid_voices,
-                label="Repeating the request.",
-            )
+        result = _evaluate_attempt(recipe, spell_paths, strict=strict)
+        if result is None:  # The camera or the model failed; nothing to grade.
+            _stop_ambience()  # Clear the ring for the cue.
+            light_control.fizzle()
+            print("Round complete: evaluation failed.\n")
+            return
 
-        attempts = retries + 1
-        for attempt in range(1, attempts + 1):
-            final = attempt == attempts
-            print(f"Attempt {attempt} of {attempts}.")
+        print(
+            f"Outcome: {result.outcome.name} "
+            f"(found {sorted(i.answer for i in result.found)}, "
+            f"missing {sorted(i.answer for i in result.missing)})"
+        )
 
-            if not perform_spell(
-                recipe.announce(),
-                strict=strict,
-                paid_voices=paid_voices,
-                label="Voicing the request.",
-            ):
-                return  # TTS fell back; end the round.
-
-            drops = ir_sensor.collect_breaks(
-                len(recipe.ingredients),
-                timeout=COLLECTION_TIMEOUT_SEC,
-                settle=SETTLE_GAP_SEC,
-                idle_timeout=IDLE_TIMEOUT_SEC,
-                hold=HOLD_TO_REPEAT_SEC,
-                on_break=on_break,
-                on_repeat=on_repeat,
-            )
-            if drops == 0:
-                print("Nothing was dropped. The witches lose interest.\n")
-                return
-
-            result = _evaluate_attempt(recipe, drops, strict=strict)
-            if result is None:  # The camera or the model failed; nothing to grade.
-                if final:
-                    _stop_ambience()  # Clear the ring for the cue.
-                    light_control.fizzle()
-                    print("Round complete: out of attempts.\n")
-                    return
-                print(f"{attempts - attempt} attempt(s) left.")
-                continue
-
-            print(
-                f"Outcome: {result.outcome.name} "
-                f"(found {sorted(i.answer for i in result.found)}, "
-                f"missing {sorted(i.answer for i in result.missing)})"
-            )
-
-            if result.outcome is spell_generator.Outcome.SUCCESS:
-                _voice_reaction(
-                    functools.partial(
-                        spell_generator.generate_outcome_spell, result, final=True
-                    ),
-                    strict=strict,
-                    paid_voices=paid_voices,
-                    label="Voicing the triumph.",
-                )
-                light_control.celebrate()
-                print("Round complete: success.\n")
-                return
-
-            if final:
-                _voice_reaction(
-                    functools.partial(
-                        spell_generator.generate_outcome_spell, result, final=True
-                    ),
-                    strict=strict,
-                    paid_voices=paid_voices,
-                    label="Voicing the curse.",
-                )
-                light_control.fizzle()
-                print("Round complete: out of attempts.\n")
-                return
-
+        if result.outcome is spell_generator.Outcome.SUCCESS:
             _voice_reaction(
-                functools.partial(spell_generator.hint_spell, result),
+                functools.partial(spell_generator.generate_outcome_spell, result),
                 strict=strict,
                 paid_voices=paid_voices,
-                label="Voicing a hint.",
+                label="Voicing the triumph.",
             )
-            print(f"{attempts - attempt} attempt(s) left.")
+            light_control.celebrate()
+            print("Round complete: success.\n")
+            return
+
+        _voice_reaction(
+            functools.partial(spell_generator.generate_outcome_spell, result),
+            strict=strict,
+            paid_voices=paid_voices,
+            label="Voicing the curse.",
+        )
+        light_control.fizzle()
+        print("Round complete: failure.\n")
     finally:
         _stop_ambience()
 
@@ -396,7 +375,6 @@ def main(
     *,
     mode: str = "react",
     once: bool = False,
-    retries: int = MAX_RETRIES,
     ingredient_count: int = INGREDIENT_COUNT,
     paid_voices: bool = False,
 ) -> None:
@@ -417,7 +395,6 @@ def main(
                 if mode == "request":
                     process_requested_spell(
                         strict=once,
-                        retries=retries,
                         ingredient_count=ingredient_count,
                         paid_voices=paid_voices,
                     )
@@ -470,12 +447,6 @@ if __name__ == "__main__":
         "The live show always uses the premium voices regardless of this flag.",
     )
     parser.add_argument(
-        "--retries",
-        type=int,
-        default=MAX_RETRIES,
-        help=f"request mode: extra attempts after the first (default: {MAX_RETRIES}).",
-    )
-    parser.add_argument(
         "--ingredients",
         type=int,
         default=INGREDIENT_COUNT,
@@ -487,7 +458,6 @@ if __name__ == "__main__":
         main(
             mode=args.mode,
             once=args.once,
-            retries=args.retries,
             ingredient_count=args.ingredients,
             paid_voices=args.paid_voices,
         )

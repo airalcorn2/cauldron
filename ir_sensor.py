@@ -30,97 +30,111 @@ def beam_broken(pin: int = IR_SENSOR_PIN) -> bool:
     return GPIO.input(pin) == GPIO.LOW
 
 
-def _await_clear(pin: int, debounce: float) -> float:
+def wait_for_quiet(settle: float, pin: int = IR_SENSOR_PIN) -> None:
+    """Wait until the beam has been clear for ``settle`` continuous seconds.
+
+    Call right after a triggering break to give a moment for more objects to
+    land before acting on the tray: any further break resets the settle
+    clock. No timeout: fine for a prop that is watched rather than left fully
+    unattended. Call with a deadline of your own (or just interrupt the
+    process) if that ever stops being true.
+    """
+    last_broken = time.monotonic()
+    while True:
+        if beam_broken(pin):
+            last_broken = time.monotonic()
+        if time.monotonic() - last_broken >= settle:
+            return
+        time.sleep(_POLL_SEC)
+
+
+def _await_clear(
+    pin: int,
+    debounce: float,
+    *,
+    hold: float | None = None,
+    on_hold: Callable[[], None] | None = None,
+) -> float:
     """Block until the beam has been clear for ``debounce`` continuous seconds.
 
     Brief re-breaks (sensor bounce as an object tumbles past) do not end the
     wait. Returns how long the beam was obstructed, measured from the first
     sample to the last break seen.
+
+    If ``hold`` is given, ``on_hold`` fires the instant the obstruction --
+    while still ongoing -- reaches that duration, rather than waiting for it
+    to end first.
     """
     start = time.monotonic()
     last_broken = start
+    hold_fired = False
     while True:
         if beam_broken(pin):
             last_broken = time.monotonic()
+            if (
+                hold is not None
+                and not hold_fired
+                and last_broken - start >= hold
+            ):
+                hold_fired = True
+                if on_hold is not None:
+                    on_hold()
         elif time.monotonic() - last_broken >= debounce:
             return last_broken - start
         time.sleep(_POLL_SEC)
 
 
-def wait_for_quiet(
-    settle: float, *, timeout: float, pin: int = IR_SENSOR_PIN
-) -> None:
-    """Wait until the beam has been clear for ``settle`` continuous seconds.
-
-    Call right after a triggering break to give a moment for more objects to
-    land before acting on the tray: any further break resets the settle clock,
-    the same way ``collect_breaks`` settles after its last expected drop. Gives
-    up after ``timeout`` seconds even if the beam never truly settles, so a
-    steady stream of drops can't stall the show forever.
-    """
-    deadline = time.monotonic() + timeout
-    last_broken = time.monotonic()
-    while True:
-        if beam_broken(pin):
-            last_broken = time.monotonic()
-        now = time.monotonic()
-        if now - last_broken >= settle or now >= deadline:
-            return
-        time.sleep(_POLL_SEC)
-
-
-def collect_breaks(
-    expected: int,
-    *,
-    timeout: float,
+def wait_for_drops(
     settle: float,
-    idle_timeout: float,
+    *,
     hold: float = 1.2,
     clear_debounce: float = 0.12,
-    on_break: Callable[[int], None] | None = None,
+    on_obstruct: Callable[[], None] | None = None,
+    on_drop: Callable[[], None] | None = None,
     on_repeat: Callable[[], None] | None = None,
     pin: int = IR_SENSOR_PIN,
-) -> int:
-    """Count objects passing through the beam during a collection window.
+) -> None:
+    """Wait for items to be dropped in, then for the beam to go quiet.
 
-    A quick break -- something falling through -- counts as one drop, even if
-    the sensor bounces during the pass; ``clear_debounce`` seconds of continuous
-    clear signal end the event. Obstructing the beam for ``hold`` seconds or
-    more is instead a "repeat" gesture: it calls ``on_repeat`` and is not
-    counted (a falling object cannot hold the beam that long).
+    Unlike react/story mode, nothing has been dropped yet when request mode
+    starts this wait, so it blocks for the first break itself rather than
+    expecting the caller to have just seen one. Obstructing the beam for
+    ``hold`` seconds or more -- at any point, not just before the first real
+    drop -- is a "repeat the request" gesture instead of a drop: ``on_repeat``
+    fires the instant that threshold is reached, while the beam is still
+    held, rather than waiting for the mortal to let go first. A quick
+    pass-through, below ``hold``, calls ``on_drop`` instead once it ends, and
+    (like any further drop) resets the settle clock.
 
-    Counting stops once ``expected`` drops have been seen and the beam has then
-    stayed clear for ``settle`` seconds, or when ``timeout`` seconds elapse. If
-    nothing passes within ``idle_timeout``, returns 0. ``on_break`` receives the
-    running count after each counted drop.
+    There is no way to tell which one a break will turn out to be until
+    either the hold threshold or a release happens, so ``on_obstruct`` fires
+    immediately on *any* break, before it is classified at all -- in time to
+    silence ambience before it could possibly turn into a hold, rather than
+    leaving it running and only cutting it after the fact. No timeout, for
+    the same reason as ``wait_for_quiet``.
     """
-    start = time.monotonic()
-    count = 0
+    started = False
     settled_since: float | None = None
 
     while True:
         now = time.monotonic()
-        if now - start > timeout:
-            return count
-        if count == 0 and now - start > idle_timeout:
-            return 0
-        if count >= expected:
+        if started:
             if settled_since is None:
                 settled_since = now
             elif now - settled_since >= settle:
-                return count
+                return
 
         if beam_broken(pin):
             settled_since = None
-            obstructed = _await_clear(pin, clear_debounce)
-            if obstructed >= hold:
-                if on_repeat is not None:
-                    on_repeat()
-                start = time.monotonic()  # Fresh window after a repeat.
-            else:
-                count += 1
-                if on_break is not None:
-                    on_break(count)
+            if on_obstruct is not None:
+                on_obstruct()
+            obstructed = _await_clear(
+                pin, clear_debounce, hold=hold, on_hold=on_repeat
+            )
+            if obstructed < hold:
+                started = True
+                if on_drop is not None:
+                    on_drop()
         time.sleep(_POLL_SEC)
 
 

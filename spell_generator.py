@@ -65,28 +65,16 @@ _PRECISE_CONFIG = types.GenerateContentConfig(
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 )
 
-# Random angles fed into the recipe prompt so successive rounds keep changing.
-_INSPIRATIONS = (
-    "a kitchen junk drawer",
-    "a gardener's shed",
-    "the bottom of a school backpack",
-    "a sewing kit",
-    "a cluttered office desk",
-    "a car glovebox",
-    "a bathroom cabinet",
-    "an autumn nature walk",
-    "a toolbox",
-    "a craft-supply bin",
-    "a winter coat's pockets",
-    "a pet's toy basket",
-    "a picnic basket",
-    "a first-aid kit",
-    "a drawer of obsolete gadgets",
-    "a bird-watcher's daypack",
-    "a campsite at dusk",
-    "a jar of loose change and what sits beside it",
-    "a stationery cupboard",
-    "a beachcomber's pockets",
+# Request-mode ingredients are sampled from this curated pool rather than
+# invented by the model: it keeps successive rounds from converging on the
+# same few objects, and keeps every item sized to actually fit through the
+# drop chute (~5" diameter), neither of which the model reliably got right
+# on its own. See items.txt.
+_ITEMS_PATH = Path("items.txt")
+_ITEMS: tuple[str, ...] = tuple(
+    line.strip()
+    for line in _ITEMS_PATH.read_text().splitlines()
+    if line.strip()
 )
 
 
@@ -281,14 +269,26 @@ def generate_story_from_image(image_path: str | Path) -> Spell:
 
 
 def request_recipe(ingredient_count: int = 2) -> Recipe:
-    """Ask the model to invent a recipe: objects to fetch plus the witch lines."""
+    """Sample objects from the curated pool and ask the model to phrase them.
+
+    The model only decides style (explicit/riddle) and wording, never which
+    objects to use -- see _ITEMS.
+    """
     order = _random_order()
-    prompt = prompts.request(
-        ingredient_count,
-        inspiration=random.choice(_INSPIRATIONS),
-        order=_order_text(order),
-    )
-    return Recipe.from_api_json(_generate_json(prompt, "recipe"), order)
+    items = tuple(random.sample(_ITEMS, ingredient_count))
+    prompt = prompts.request(items, order=_order_text(order))
+    raw = json.loads(_generate_json(prompt, "recipe"))
+    try:
+        ingredients = tuple(
+            Ingredient.from_dict({**item, "answer": answer})
+            for item, answer in zip(raw["ingredients"], items, strict=True)
+        )
+        lines = {w: raw["lines"][w.value] for w in Witch}
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"malformed recipe response: {raw!r}") from exc
+    if not ingredients:
+        raise ValueError("recipe has no ingredients")
+    return Recipe(ingredients, lines, order)
 
 
 def evaluate_tray(recipe: Recipe, image_path: str | Path) -> RoundResult:
@@ -322,8 +322,8 @@ def evaluate_tray(recipe: Recipe, image_path: str | Path) -> RoundResult:
     return RoundResult(recipe=recipe, found=found, missing=missing, extras=extras)
 
 
-def generate_outcome_spell(result: RoundResult, *, final: bool) -> Spell:
-    """The witches' reaction spell, keyed to the verdict."""
+def generate_outcome_spell(result: RoundResult) -> Spell:
+    """The witches' one-shot reaction spell, keyed to the verdict."""
     order = _random_order()
     return _spell_from_prompt(
         prompts.outcome(
@@ -332,32 +332,9 @@ def generate_outcome_spell(result: RoundResult, *, final: bool) -> Spell:
             missing=", ".join(i.answer for i in result.missing) or "nothing",
             extras=", ".join(result.extras) or "none",
             verdict=result.outcome.name,
-            final=final,
             order=_order_text(order),
         ),
         "outcome",
-        order,
-    )
-
-
-def hint_spell(result: RoundResult) -> Spell:
-    """Three goading lines between retries, nudging toward the missing items."""
-    missing = ", ".join(
-        i.prompt if i.style is RequestStyle.RIDDLE else i.answer for i in result.missing
-    )
-    extras_note = (
-        f"They also dumped in junk you never asked for: {', '.join(result.extras)}."
-        if result.extras
-        else ""
-    )
-    order = _random_order()
-    return _spell_from_prompt(
-        prompts.hint(
-            missing=missing or "one last thing",
-            extras_note=extras_note,
-            order=_order_text(order),
-        ),
-        "hint",
         order,
     )
 
@@ -458,7 +435,7 @@ def _run_evaluate(recipe_json: str, image: str, *, with_outcome: bool) -> None:
     print(f"extras:  {list(result.extras)}")
     if with_outcome:
         print("--- outcome spell ---")
-        for witch, line in generate_outcome_spell(result, final=False):
+        for witch, line in generate_outcome_spell(result):
             print(f"{witch}: {line}")
 
 

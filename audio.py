@@ -203,9 +203,13 @@ def main() -> None:
     parser.add_argument(
         "--voice-volume",
         type=float,
-        metavar="0-1",
+        metavar="0-1+",
         help=f"Playback volume when playing path directly, via play_file() as "
-        f"the live show does for witch lines (default: {VOICE_VOLUME:g}).",
+        f"the live show does for witch lines (default: {VOICE_VOLUME:g}). "
+        f"Unlike --bubble-volume/--laugh-volume, this isn't capped at 1 -- "
+        f"it's a real amplification factor on mpg123's decoder, so values "
+        f"above 1 genuinely boost volume past the source's original level "
+        f"(at the cost of possible clipping/distortion if pushed too far).",
     )
     args = parser.parse_args()
 

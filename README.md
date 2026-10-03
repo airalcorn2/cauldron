@@ -32,9 +32,8 @@ The beam has to go quiet for a couple of seconds before the photo is taken, so a
 **story** — identical to react, except the witches tell a short spooky story featuring the dropped items instead of reciting a rhyming spell, with each witch continuing where the last left off.
 
 **request** — the witches announce a recipe of two objects to fetch, some named plainly and some as riddles.
-The mortal drops items; each object passing the beam is counted, and holding a hand in the beam for about a second replays the request.
-Once the expected number of items has landed and the tray has settled, the camera takes one photo and the model checks it against the recipe.
-Success gets a triumphant spell and a green shimmer; a miss gets a goading hint and another try (two retries by default, `--retries N`); the final failure gets a comedic curse and a red fizzle.
+The mortal drops items in (holding a hand in the beam instead replays the request); once the beam has gone quiet for a couple of seconds, the camera takes one photo and the model checks it against the recipe.
+One attempt only: success gets a triumphant spell and a green shimmer, anything less gets a comedic curse and a red fizzle.
 On an API failure the recipe falls back to a small built-in pool.
 
 ## Software Layout

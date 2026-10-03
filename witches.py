@@ -54,11 +54,14 @@ class WitchProfile:
     style: float
     speed: float = 1.0
     use_speaker_boost: bool = True
-    # Per-witch playback volume (0.0-1.0+), since some voices render quieter
-    # than others at the same ElevenLabs settings. audio.py reads this via its
+    # Per-witch playback volume, since some voices render quieter than others
+    # at the same ElevenLabs settings. Not capped at 1.0 -- audio.py applies
+    # this as a real amplification factor on mpg123's decoder, so values
+    # above 1 genuinely boost past the source's original level (at the risk
+    # of clipping/distortion if pushed too far). audio.py reads this via its
     # own WITCH_VOLUMES, the same way light_control.py reads color via
-    # WITCH_COLORS. Tune with `audio.py <path> --voice-volume` to A/B a value
-    # before setting it here.
+    # WITCH_COLORS. Tune with `audio.py --role <witch> --voice-volume` to A/B
+    # a value before setting it here.
     volume: float = 0.3
 
 
@@ -101,6 +104,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         similarity_boost=0.7,
         style=0.3,
         speed=0.92,
-        volume=0.95,  # Renders quieter than Violet/Amber at the same settings.
+        volume=1.5,  # Renders quieter than Violet/Amber at the same settings.
     ),
 }
