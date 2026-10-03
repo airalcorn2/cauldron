@@ -85,6 +85,17 @@ _ITEMS: tuple[str, ...] = tuple(
     if line.strip()
 )
 
+# Category-mode challenges are sampled from this pool for the same reason
+# request-mode ingredients are: keeps successive rounds varied. Each line
+# completes "something ___", e.g. "round" -> "something round". See
+# categories.txt.
+_CATEGORIES_PATH = Path("categories.txt")
+_CATEGORIES: tuple[str, ...] = tuple(
+    line.strip()
+    for line in _CATEGORIES_PATH.read_text().splitlines()
+    if line.strip()
+)
+
 
 class RequestStyle(StrEnum):
     """How a requested ingredient is phrased to the mortal."""
@@ -223,6 +234,48 @@ class RoundResult:
         if len(self.found) > 0:
             return Outcome.PARTIAL
         return Outcome.FAILURE
+
+
+@dataclass(frozen=True, slots=True)
+class Challenge:
+    """Category mode: a property to satisfy, plus the witch lines that ask for it."""
+
+    category: str  # Completes "something ___", e.g. "round".
+    lines: dict[Witch, str]
+    order: tuple[Witch, ...] = tuple(Witch)
+
+    def announce(self) -> Spell:
+        """The lines that challenge the mortal to bring something matching."""
+        return Spell(lines=self.lines, order=self.order)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "category": self.category,
+            "lines": {w.value: self.lines[w] for w in Witch},
+            "order": [w.value for w in self.order],
+        }
+
+    @classmethod
+    def from_api_json(cls, payload: str) -> Challenge:
+        """Parse a saved challenge. Raises ``ValueError`` if malformed."""
+        raw = json.loads(payload)
+        try:
+            category = raw["category"]
+            lines = {w: raw["lines"][w.value] for w in Witch}
+            order = tuple(Witch(w) for w in raw.get("order", list(Witch)))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"malformed challenge: {raw!r}") from exc
+        return cls(category, lines, order)
+
+
+@dataclass(frozen=True, slots=True)
+class CategoryOutcome:
+    """What a tray photo contained, measured against a category challenge."""
+
+    challenge: Challenge
+    satisfied: bool
+    matching_item: str | None  # Which item satisfied it, if any.
+    items_seen: tuple[str, ...]  # Everything visible, for the reaction spell.
 
 
 def _generate_json(
@@ -375,6 +428,95 @@ def generate_outcome_spell(result: RoundResult) -> Spell:
     )
 
 
+def category_challenge() -> Challenge:
+    """Sample a property from the curated pool and ask the model to phrase it.
+
+    The model only decides wording, never which property to challenge with
+    -- see _CATEGORIES.
+    """
+    order = _random_order()
+    category = random.choice(_CATEGORIES)
+    prompt = prompts.category_challenge(category, order=_order_text(order))
+    raw = json.loads(_generate_json(prompt, "challenge"))
+    try:
+        lines = {w: raw["lines"][w.value] for w in Witch}
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"malformed challenge response: {raw!r}") from exc
+    return Challenge(category, lines, order)
+
+
+def evaluate_category(challenge: Challenge, image_path: str | Path) -> CategoryOutcome:
+    """Check a tray photo against a category challenge."""
+    image_data = Path(image_path).read_bytes()
+    part = types.Part.from_bytes(data=image_data, mime_type="image/jpeg")
+    raw = json.loads(
+        _generate_json(
+            [part, prompts.category_evaluate(challenge.category)],
+            "category_evaluate",
+            config=_PRECISE_CONFIG,
+        )
+    )
+    return CategoryOutcome(
+        challenge=challenge,
+        satisfied=bool(raw.get("satisfied", False)),
+        matching_item=raw.get("matching_item"),
+        items_seen=tuple(str(x) for x in raw.get("items_seen", [])),
+    )
+
+
+def generate_category_outcome_spell(result: CategoryOutcome) -> Spell:
+    """The witches' one-shot reaction spell, keyed to the category verdict."""
+    order = _random_order()
+    return _spell_from_prompt(
+        prompts.category_outcome(
+            category=result.challenge.category,
+            items_seen=(
+                ", ".join(result.items_seen)
+                if len(result.items_seen) > 0
+                else "nothing"
+            ),
+            satisfied=result.satisfied,
+            order=_order_text(order),
+        ),
+        "category_outcome",
+        order,
+    )
+
+
+# Pre-written challenges for when category_challenge() cannot reach the API.
+FALLBACK_CHALLENGES: tuple[Challenge, ...] = (
+    Challenge(
+        category="round",
+        lines={
+            Witch.VIOLET: "Bring us something round, a shape with no end,",
+            Witch.AMBER: "no corners to count and no edge to defend!",
+            Witch.HAZEL: "Round as the moon, or the cauldron's own rim.",
+        },
+    ),
+    Challenge(
+        category="that makes noise",
+        lines={
+            Witch.VIOLET: "Bring us a sound trapped in something you own,",
+            Witch.AMBER: "a rattle, a ring, or a squeak all alone!",
+            Witch.HAZEL: "Make this cauldron hear something it's never known.",
+        },
+    ),
+    Challenge(
+        category="shiny",
+        lines={
+            Witch.VIOLET: "Bring us a glimmer, a gleam, or a shine,",
+            Witch.AMBER: "something that catches the light just so fine!",
+            Witch.HAZEL: "Dull little mortal, go make something mine.",
+        },
+    ),
+)
+
+
+def random_fallback_challenge() -> Challenge:
+    """Pick a pre-written challenge when the API is unavailable."""
+    return random.choice(FALLBACK_CHALLENGES)
+
+
 # Pre-written recipes for when request_recipe() cannot reach the API.
 FALLBACK_RECIPES: tuple[Recipe, ...] = (
     Recipe(
@@ -485,6 +627,21 @@ def _run_evaluate(recipe_json: str, image: str, *, with_outcome: bool) -> None:
             print(f"{witch}: {line}")
 
 
+def _run_challenge() -> None:
+    print(json.dumps(category_challenge().to_dict(), indent=2))
+
+
+def _run_challenge_outcome(challenge_json: str, image: str) -> None:
+    challenge = Challenge.from_api_json(Path(challenge_json).read_text())
+    result = evaluate_category(challenge, image)
+    print(f"satisfied:      {result.satisfied}")
+    print(f"matching_item:  {result.matching_item}")
+    print(f"items_seen:     {list(result.items_seen)}")
+    print("--- outcome spell ---")
+    for witch, line in generate_category_outcome_spell(result):
+        print(f"{witch}: {line}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate a spell (react mode), a story (story mode), a "
@@ -539,14 +696,31 @@ def main() -> None:
         metavar=("RECIPE_JSON", "IMAGE"),
         help="Like --evaluate, then also generate and print the outcome spell.",
     )
+    parser.add_argument(
+        "--challenge",
+        action="store_true",
+        help="Invent a category challenge (property plus witch lines) and "
+        "print it as JSON.",
+    )
+    parser.add_argument(
+        "--challenge-outcome",
+        nargs=2,
+        metavar=("CHALLENGE_JSON", "IMAGE"),
+        help="Check a tray photo against a saved challenge and print the "
+        "result and outcome spell.",
+    )
     args = parser.parse_args()
 
     if args.request:
         _run_request(args.ingredients)
+    elif args.challenge:
+        _run_challenge()
     elif args.evaluate is not None:
         _run_evaluate(*args.evaluate, with_outcome=False)
     elif args.outcome is not None:
         _run_evaluate(*args.outcome, with_outcome=True)
+    elif args.challenge_outcome is not None:
+        _run_challenge_outcome(*args.challenge_outcome)
     elif args.image is not None:
         if args.story:
             _run_story(args.image)
@@ -557,7 +731,10 @@ def main() -> None:
         else:
             _run_react(args.image)
     else:
-        parser.error("give an image, or use --request / --evaluate / --outcome")
+        parser.error(
+            "give an image, or use --request / --challenge / --evaluate / "
+            "--outcome / --challenge-outcome"
+        )
 
 
 if __name__ == "__main__":

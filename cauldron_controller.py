@@ -1,6 +1,6 @@
 """Interactive Halloween cauldron controller.
 
-Five modes, selected with ``--mode``:
+Six modes, selected with ``--mode``:
 
   react (default)
     IR beam broken -> bubbling SFX and LED strobe -> a pause for the beam to
@@ -37,6 +37,14 @@ Five modes, selected with ``--mode``:
     shimmer on success, or a comedic curse and a red fizzle on anything
     less.
 
+  category
+    Like request, but the witches challenge a property instead of naming
+    objects (e.g. "something round") -- the mortal picks what counts, and
+    the model judges whatever lands against the property rather than
+    matching a fixed list. Same wait/repeat-gesture/one-attempt mechanics
+    as request; see process_category_challenge() and
+    _evaluate_category_attempt().
+
 The bubbling SFX and LED strobe cover every wait on a slow API call, and
 perform_spell() stops them immediately before the witches recite.
 
@@ -53,6 +61,7 @@ spell_generator.py, voice_generator.py, and actuator.py.
 
     .venv/bin/python cauldron_controller.py                  # React mode, looping.
     .venv/bin/python cauldron_controller.py --mode request   # Request mode, looping.
+    .venv/bin/python cauldron_controller.py --mode category  # Category mode, looping.
     .venv/bin/python cauldron_controller.py --mode story     # Story mode, looping.
     .venv/bin/python cauldron_controller.py --mode joke      # Joke mode, looping.
     .venv/bin/python cauldron_controller.py --mode prophecy  # Prophecy mode, looping.
@@ -265,21 +274,18 @@ def process_spooky_spell(
         _stop_ambience()
 
 
-def _evaluate_attempt(
-    recipe: spell_generator.Recipe,
-    spell_paths: Mapping[Witch, Path],
-    *,
-    strict: bool,
-) -> spell_generator.RoundResult | None:
-    """Wait for the mortal to drop items, then photograph the tray and score it.
+def _wait_for_drop_then_capture(
+    spell_paths: Mapping[Witch, Path], *, strict: bool
+) -> Path | None:
+    """Wait for the mortal to drop something in, then photograph the tray.
 
-    The request was just spoken, so the prop is silent; ambience only starts
-    once a beam break is confirmed to be an item rather than a hold-to-repeat
-    gesture (on_drop), covering the capture/evaluate work that follows. A
-    repeat (on_repeat) just replays ``spell_paths`` (the request
-    announcement's own TTS output, handed in by the caller) and never starts
-    ambience itself -- the next real drop will, same as always, if one
-    follows. Returns None if the camera or model failed.
+    The announcement was just spoken, so the prop is silent; ambience only
+    starts once a beam break is confirmed to be a drop rather than a
+    hold-to-repeat gesture (on_drop), covering the capture/evaluate work
+    that follows. A repeat (on_repeat) just replays ``spell_paths`` (the
+    announcement's own TTS output, handed in by the caller) and never
+    starts ambience itself -- the next real drop will, same as always, if
+    one follows. Returns None if the camera failed.
 
     Leaves the ambience running: the caller's next perform_spell() stops it for
     the recitation, so there is no silent gap while the outcome voices render.
@@ -304,8 +310,46 @@ def _evaluate_attempt(
         return None
     print(f"Captured {img_path}.")
     start_stage_dump()
+    return img_path
+
+
+def _evaluate_attempt(
+    recipe: spell_generator.Recipe,
+    spell_paths: Mapping[Witch, Path],
+    *,
+    strict: bool,
+) -> spell_generator.RoundResult | None:
+    """Wait for the mortal to drop items, then score the tray against ``recipe``.
+
+    Returns None if the camera or model failed.
+    """
+    img_path = _wait_for_drop_then_capture(spell_paths, strict=strict)
+    if img_path is None:
+        return None
     try:
         return spell_generator.evaluate_tray(recipe, img_path)
+    except Exception as exc:
+        if strict:
+            raise
+        print(f"Evaluation API error: {exc}")
+        return None
+
+
+def _evaluate_category_attempt(
+    challenge: spell_generator.Challenge,
+    spell_paths: Mapping[Witch, Path],
+    *,
+    strict: bool,
+) -> spell_generator.CategoryOutcome | None:
+    """Wait for the mortal to drop something in, then judge it against ``challenge``.
+
+    Returns None if the camera or model failed.
+    """
+    img_path = _wait_for_drop_then_capture(spell_paths, strict=strict)
+    if img_path is None:
+        return None
+    try:
+        return spell_generator.evaluate_category(challenge, img_path)
     except Exception as exc:
         if strict:
             raise
@@ -384,6 +428,68 @@ def process_requested_spell(
         _stop_ambience()
 
 
+def process_category_challenge(*, strict: bool, paid_voices: bool = False) -> None:
+    """Category mode: the witches challenge the mortal to bring something
+    matching a property, then judge whatever lands against it.
+
+    One attempt only, same as request mode.
+    """
+    print("Beam broken. The witches pose a challenge.")
+
+    _start_ambience()
+    try:
+        try:
+            challenge = spell_generator.category_challenge()
+        except Exception as exc:
+            if strict:
+                raise
+            print(f"Challenge API error: {exc}")
+            challenge = spell_generator.random_fallback_challenge()
+        print(f"Challenge: something {challenge.category}")
+
+        spell_paths = perform_spell(
+            challenge.announce(),
+            strict=strict,
+            paid_voices=paid_voices,
+            label="Voicing the challenge.",
+        )
+        if spell_paths is None:
+            return  # TTS fell back; end the round.
+
+        result = _evaluate_category_attempt(challenge, spell_paths, strict=strict)
+        if result is None:  # The camera or the model failed; nothing to grade.
+            _stop_ambience()  # Clear the ring for the cue.
+            light_control.fizzle()
+            print("Round complete: evaluation failed.\n")
+            return
+
+        print(f"Satisfied: {result.satisfied} (saw {list(result.items_seen)})")
+
+        if result.satisfied:
+            _voice_reaction(
+                functools.partial(
+                    spell_generator.generate_category_outcome_spell, result
+                ),
+                strict=strict,
+                paid_voices=paid_voices,
+                label="Voicing the triumph.",
+            )
+            light_control.celebrate()
+            print("Round complete: success.\n")
+            return
+
+        _voice_reaction(
+            functools.partial(spell_generator.generate_category_outcome_spell, result),
+            strict=strict,
+            paid_voices=paid_voices,
+            label="Voicing the curse.",
+        )
+        light_control.fizzle()
+        print("Round complete: failure.\n")
+    finally:
+        _stop_ambience()
+
+
 def main(
     *,
     mode: str = "react",
@@ -411,6 +517,8 @@ def main(
                         ingredient_count=ingredient_count,
                         paid_voices=paid_voices,
                     )
+                elif mode == "category":
+                    process_category_challenge(strict=once, paid_voices=paid_voices)
                 elif mode == "story":
                     process_spooky_spell(
                         strict=once,
@@ -452,13 +560,13 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mode",
-        choices=("react", "request", "story", "joke", "prophecy"),
+        choices=("react", "request", "category", "story", "joke", "prophecy"),
         default="react",
         help="react: spell about whatever is dropped. request: the witches name "
-        "ingredients to fetch. story: a short spooky story about whatever is "
-        "dropped. joke: a fun, spooky joke about whatever is dropped. "
-        "prophecy: a campy, over-dramatic fortune about whatever is dropped "
-        "(default: react).",
+        "ingredients to fetch. category: the witches challenge a property to "
+        "match. story: a short spooky story about whatever is dropped. joke: "
+        "a fun, spooky joke about whatever is dropped. prophecy: a campy, "
+        "over-dramatic fortune about whatever is dropped (default: react).",
     )
     parser.add_argument(
         "--once",

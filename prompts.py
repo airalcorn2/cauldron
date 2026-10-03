@@ -32,6 +32,16 @@ _RETURN_JSON = (
     "Return ONLY a valid JSON object in this exact format, with no extra text:"
 )
 
+# The rig itself shows up in every tray photo: duct tape holds the capture
+# tray together, and white fluff from the cauldron's own stuffing sometimes
+# falls in. Neither is something the mortal dropped, so every prompt that
+# looks at the photo needs to be told to disregard them.
+_IGNORE_RIG_NOISE = (
+    "Ignore the duct tape holding the capture tray together and any white "
+    "fluff that falls in from the cauldron's own stuffing -- neither is "
+    "something the mortal dropped in."
+)
+
 # Built from Witch rather than spelled out, so the reply shapes never drift
 # from the actual set of witches.
 _SPELL_SHAPE = "{" + ", ".join(f'"{w}": "..."' for w in Witch) + "}"
@@ -47,6 +57,16 @@ _RECIPE_SHAPE = f"""{{
 _EVAL_SHAPE = """{
   "present": ["a leaf"],
   "extras": ["a rubber duck"]
+}"""
+
+_CHALLENGE_SHAPE = f"""{{
+  "lines": {_SPELL_SHAPE}
+}}"""
+
+_CATEGORY_EVAL_SHAPE = """{
+  "satisfied": true,
+  "matching_item": "the item that fits, or null if none does",
+  "items_seen": ["everything visible in the tray"]
 }"""
 
 
@@ -74,6 +94,7 @@ def react(*, order: str) -> str:
 You are {_WITCHES}.
 
 Analyze the image of the items dropped in the cauldron's capture tray.
+{_IGNORE_RIG_NOISE}
 Generate a short three-line rhyming spell that references the identified
 objects, one line per witch.
 The spell should have an effect in the world of the cauldron—the witches
@@ -92,6 +113,7 @@ def story(*, order: str) -> str:
 You are {_WITCHES}, taking turns telling a story around the cauldron.
 
 Analyze the image of the items dropped in the cauldron's capture tray.
+{_IGNORE_RIG_NOISE}
 Weave a short, spooky story that features the identified objects as part of
 what happens in it -- found, used, hidden, cursed, or transformed, your call.
 Write it in three parts, one per witch, each picking up right where the last
@@ -111,6 +133,7 @@ def joke(*, order: str) -> str:
 You are {_WITCHES}, trading a joke around the cauldron.
 
 Analyze the image of the items dropped in the cauldron's capture tray.
+{_IGNORE_RIG_NOISE}
 Tell a short, fun, spooky joke that works the identified objects into its
 setup or punchline. Split it into three parts, one per witch, each picking
 up right where the last left off so it reads as one joke rather than three
@@ -130,6 +153,7 @@ def prophecy(*, order: str) -> str:
 You are {_WITCHES}, peering into the cauldron to read a mortal's fortune.
 
 Analyze the image of the items dropped in the cauldron's capture tray.
+{_IGNORE_RIG_NOISE}
 Deliver a campy, over-dramatic prophecy about the mortal's near future,
 weaving the identified objects into omens and portents -- treat each object
 as a sign to be theatrically interpreted, not just named. Write it in three
@@ -177,11 +201,66 @@ def evaluate(items: str) -> str:
 The witches asked the mortal to bring these items:
 {items}
 
-Look at the photo of the cauldron's capture tray. For each requested item,
-decide whether something matching it is present. Be generous: a rough match
-counts. Also list any obvious objects that were not requested.
+Look at the photo of the cauldron's capture tray. {_IGNORE_RIG_NOISE}
+For each requested item, decide whether something matching it is present.
+Be generous: a rough match counts. Also list any obvious objects that were
+not requested.
 
 {_reply(_EVAL_SHAPE)}
+"""
+
+
+def category_challenge(category: str, *, order: str) -> str:
+    """Category mode: ask the mortal to bring something matching a property.
+
+    ``category`` is chosen ahead of time from a curated pool, not invented
+    here -- the model's job is purely the phrasing.
+    """
+    return f"""
+You are {_WITCHES}, challenging a mortal to bring you something {category}.
+
+Write three short rhyming lines, one per witch, that together ask the
+mortal to bring something {category}. Do not narrow it down to a specific
+object -- the whole game is that the mortal gets to pick what counts.
+{_order_note(order)}
+
+{_reply(_CHALLENGE_SHAPE)}
+"""
+
+
+def category_evaluate(category: str) -> str:
+    """Category mode: check a tray photo against the challenge property."""
+    return f"""
+The witches challenged the mortal to bring something {category}.
+
+Look at the photo of the cauldron's capture tray. {_IGNORE_RIG_NOISE}
+Decide whether anything present plausibly satisfies that description. Be
+generous and whimsical -- this is a fun game, not a strict test, so a
+reasonable or creative interpretation counts. Also list everything else
+visible in the tray.
+
+{_reply(_CATEGORY_EVAL_SHAPE)}
+"""
+
+
+def category_outcome(
+    *, category: str, items_seen: str, satisfied: bool, order: str
+) -> str:
+    """Category mode: the witches' one-shot reaction, keyed to the verdict."""
+    return f"""
+You are {_WITCHES}, reacting to what the mortal brought.
+
+The challenge: something {category}.
+What landed in the tray: {items_seen}
+Satisfied: {satisfied}
+
+Write a short three-line rhyming spell, one line per witch, reacting to the
+verdict. If satisfied, be triumphant and call out cleverly how what they
+brought fits the challenge. If not, mock the mortal and let the spell
+backfire comically. Either way, make it conclusive -- there is no second try.
+{_order_note(order)}
+
+{_reply(_SPELL_SHAPE)}
 """
 
 

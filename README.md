@@ -24,7 +24,7 @@ See [Materials](docs/materials.md) for the full parts list.
 
 ## Modes
 
-The controller takes `--mode react` (default), `--mode story`, `--mode joke`, `--mode prophecy`, or `--mode request`.
+The controller takes `--mode react` (default), `--mode story`, `--mode joke`, `--mode prophecy`, `--mode request`, or `--mode category`.
 
 **react** — the witches conjure a spell about whatever the mortal drops in.
 The beam has to go quiet for a couple of seconds before the photo is taken, so a second item dropped in right after the first still makes the shot.
@@ -40,6 +40,8 @@ The mortal drops items in (holding a hand in the beam instead replays the reques
 One attempt only: success gets a triumphant spell and a green shimmer, anything less gets a comedic curse and a red fizzle.
 On an API failure the recipe falls back to a small built-in pool.
 
+**category** — like request, but the witches challenge a property instead of naming objects (e.g. "something round" or "something that makes noise") rather than a fixed list — the mortal picks what counts, and the model judges whatever lands against the property. Same wait/repeat-gesture/one-attempt mechanics and outcome lighting as request.
+
 ## Software Layout
 
 `cauldron_controller.py` orchestrates the show.
@@ -50,7 +52,7 @@ Each hardware or service component is a standalone module that also runs on its 
 | `ir_sensor.py` | IR break-beam sensor (GPIO 17) | `.venv/bin/python ir_sensor.py` |
 | `camera.py` | USB camera capture | `.venv/bin/python camera.py test.jpg` |
 | `light_control.py` | LED ring over SPI (GPIO 10) | `.venv/bin/python light_control.py leds` |
-| `spell_generator.py` | Gemini vision model: spells (react), stories (story), jokes (joke), prophecies (prophecy), and recipes (request) | `.venv/bin/python spell_generator.py test.jpg` |
+| `spell_generator.py` | Gemini vision model: spells (react), stories (story), jokes (joke), prophecies (prophecy), recipes (request), and category challenges (category) | `.venv/bin/python spell_generator.py test.jpg` |
 | `voice_generator.py` | ElevenLabs text-to-speech | `.venv/bin/python voice_generator.py --text "..."` |
 | `audio.py` | Sound-effect and speech playback | `.venv/bin/python audio.py --loop 5` |
 | `actuator.py` | Stage-tipping linear actuator (GPIO 16 / 26) | `.venv/bin/python actuator.py dump` |
