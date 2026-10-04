@@ -1,0 +1,15 @@
+// Lets triggerhappy's trigger commands (run as the unprivileged `nobody`
+// user -- see /usr/lib/systemd/system/triggerhappy.service's `--user
+// nobody`) start the cauldron service without polkit demanding interactive
+// authentication, which `nobody` can never provide.
+//
+// Deliberately narrow: only the "start" verb, only this one unit. nobody
+// still can't stop, restart, or manage any other service.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "cauldron.service" &&
+        action.lookup("verb") == "start" &&
+        subject.user == "nobody") {
+        return polkit.Result.YES;
+    }
+});

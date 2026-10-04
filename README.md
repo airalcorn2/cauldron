@@ -22,6 +22,7 @@ See [Materials](docs/materials.md) for the full parts list.
   - [Step 8: Testing the LED Ring](#step-8-testing-the-led-ring)
   - [Step 9: Testing the Stage Actuator](#step-9-testing-the-stage-actuator)
   - [Step 10: Running the End-to-End Smoke Test](#step-10-running-the-end-to-end-smoke-test)
+  - [Step 11: Restarting via the Gamepad](#step-11-restarting-via-the-gamepad)
 
 ## Modes
 
@@ -106,3 +107,5 @@ The wiring steps below get considerably more involved than the software ones —
 ### [Step 9: Testing the Stage Actuator](docs/step-9-stage-actuator.md)
 
 ### [Step 10: Running the End-to-End Smoke Test](docs/step-10-smoke-test.md)
+
+### [Step 11: Restarting via the Gamepad](docs/step-11-auto-start.md)

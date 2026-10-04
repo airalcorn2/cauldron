@@ -45,4 +45,4 @@ Once it passes, run the installation loop in whichever mode you want:
 .venv/bin/python cauldron_controller.py --mode prophecy  # Prophecy mode.
 ```
 
-[← Previous: Step 9: Testing the Stage Actuator](step-9-stage-actuator.md) · [↑ Back to README](../README.md)
+[← Previous: Step 9: Testing the Stage Actuator](step-9-stage-actuator.md) · [↑ Back to README](../README.md) · [Next: Step 11: Restarting via the Gamepad →](step-11-auto-start.md)

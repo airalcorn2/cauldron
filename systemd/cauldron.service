@@ -1,0 +1,31 @@
+[Unit]
+Description=Interactive Halloween Cauldron
+After=sound.target
+
+[Service]
+Type=simple
+User=wizard
+WorkingDirectory=/home/wizard/cauldron
+EnvironmentFile=/home/wizard/cauldron/.env
+# Needed so pygame's mixer (used for the bubbling/laugh ambience loop) can
+# reach the user's already-running PipeWire session -- a system service has
+# no login session of its own, so without this it fails with "ALSA:
+# Couldn't open audio device" even though the account has `loginctl
+# enable-linger` on and PipeWire running. The witch-voice lines themselves
+# don't need this: they play via mpg123/aplay subprocesses straight to
+# ALSA, independent of any session -- see audio.py's play_file(). Hardcoded
+# rather than the %U specifier: %U resolves against the system manager's
+# own UID (0), not User='s UID, in Environment= on this systemd version.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+# Unbuffered, so `print()`s show up in `journalctl -u cauldron` promptly
+# instead of sitting in a buffer that's not attached to a TTY.
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/wizard/cauldron/.venv/bin/python cauldron_controller.py
+# Deliberately no auto-respawn: the whole point of the triggerhappy setup
+# (see docs/step-11-auto-start.md) is that the cauldron stays off once
+# stopped -- by a crash or a deliberate `systemctl stop` -- until the
+# gamepad's Start button wakes it back up.
+Restart=no
+
+[Install]
+WantedBy=multi-user.target

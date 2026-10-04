@@ -80,6 +80,7 @@ import argparse
 import asyncio
 import functools
 import random
+import signal
 import sys
 import threading
 import time
@@ -796,6 +797,12 @@ def main(
 ) -> None:
     """Set up the hardware, then run the trigger loop (or one round for ``once``)."""
     global _pending_mode
+    # `systemctl stop` (see systemd/cauldron.service) sends SIGTERM, which
+    # Python otherwise ignores by just dying immediately -- skipping the
+    # `finally` below and its cleanup (don't cut power to the actuator
+    # mid-stroke, release the GPIO pins). Making it raise KeyboardInterrupt,
+    # same as Ctrl-C, routes it through the exact same shutdown path.
+    signal.signal(signal.SIGTERM, signal.default_int_handler)
     ir_sensor.setup()
     light_control.setup()
     audio.setup()
