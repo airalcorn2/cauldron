@@ -9,6 +9,7 @@ See [Materials](docs/materials.md) for the full parts list.
 ## Table of Contents
 
 - [Modes](#modes)
+- [Live Mode Switching](#live-mode-switching)
 - [Software Layout](#software-layout)
 - [Setting Up](#setting-up)
   - [Step 1: Setting Up Raspberry Pi OS](#step-1-setting-up-raspberry-pi-os)
@@ -42,6 +43,28 @@ On an API failure the recipe falls back to a small built-in pool.
 
 **category** — like request, but the witches challenge a property instead of naming objects (e.g. "something round" or "something that makes noise") rather than a fixed list — the mortal picks what counts, and the model judges whatever lands against the property. Same wait/repeat-gesture/one-attempt mechanics and outcome lighting as request.
 
+## Live Mode Switching
+
+Plug in a USB gamepad (SNES-style clones work fine — run `controller.py` directly to confirm your pad's button mapping) and the mode can be changed without restarting the process.
+
+Press **Select + Start** together to interrupt whatever's happening and open mode selection.
+A random witch asks which mode to pick, naming each button in-universe:
+
+| Button | Mode |
+| --- | --- |
+| Blue face button | react |
+| Red face button | story |
+| Yellow face button | joke |
+| Green face button | prophecy |
+| Left shoulder button ("left talon") | request |
+| Right shoulder button ("right talon") | category |
+
+Press a mode's button at any point — even mid-sentence — to pick it immediately.
+Otherwise, once the witch finishes listing them, left/right on the D-pad browses back through the options, replaying each one's line, before committing.
+The LED ring mirrors all of this: a chasing rainbow during the intro and whenever idle (including between rounds), each mode's own fixed color while it's being named or confirmed, then back to the rainbow once a mode is chosen.
+
+All of the witches' mode-selection lines are hand-written and cached to disk ahead of time (`generated/mode_select/`), so opening mode selection never waits on a network call.
+
 ## Software Layout
 
 `cauldron_controller.py` orchestrates the show.
@@ -56,6 +79,7 @@ Each hardware or service component is a standalone module that also runs on its 
 | `voice_generator.py` | ElevenLabs text-to-speech | `.venv/bin/python voice_generator.py --text "..."` |
 | `audio.py` | Sound-effect and speech playback | `.venv/bin/python audio.py --loop 5` |
 | `actuator.py` | Stage-tipping linear actuator (GPIO 16 / 26) | `.venv/bin/python actuator.py dump` |
+| `controller.py` | USB gamepad input, for live mode switching | `.venv/bin/python controller.py` |
 
 Every module accepts `--help`.
 
