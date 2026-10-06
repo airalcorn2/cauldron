@@ -2,7 +2,7 @@
 
 ## Virtualenv
 
-Install every system package the project needs in one pass: `python3-venv` for the virtualenv itself, `python3-rpi.gpio` and `python3-pygame` for GPIO and audio, and `fswebcam` and `mpg123` (the command-line tools used for bench testing in [Step 4](step-4-text-to-speech.md) and [Step 5](step-5-webcam.md)).
+Install every system package the project needs in one pass: `python3-venv` for the virtualenv itself, `python3-rpi.gpio` and `python3-pygame` for GPIO and audio, `fswebcam` for bench-testing the camera in [Step 5](step-5-webcam.md), and `mpg123` — not just a bench-testing tool, `audio.py` shells out to it for every witch voice line in the live show (see [Step 3](step-3-audio-playback.md)'s troubleshooting section for why).
 
 ```bash
 sudo apt update

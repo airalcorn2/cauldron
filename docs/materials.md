@@ -3,7 +3,8 @@
 **Props**
 
 - [Side Table](https://www.athome.com/paxton-accent-table-black/125032157.html) — $50, but we got it on sale for $35.
-- Plastic Cauldron — $10. We also bought this at At Home, but I don't see it on their website.
+- Plastic Cauldron — $10.
+  We also bought this at At Home, but I don't see it on their website.
 
 **Compute**
 
@@ -12,11 +13,19 @@
 
 **Vision**
 
-- Any USB webcam will work. I used a Microsoft LifeCam I've had since 2012.
+- Any USB webcam will work.
+  I used a Microsoft LifeCam I've had since 2012.
 
 **Audio**
 
-- Any speakers with a 3.5mm jack will work. I used old ones I had around.
+- Any speakers with a 3.5mm jack will work.
+  I used old ones I had around.
+
+**Controller**
+
+- Any USB gamepad with 8 buttons plus a D-pad will work (no analog sticks needed).
+  I used a cheap SNES-style clone.
+  Only needed for live mode switching and the brew/play mini-modes (see [Step 11](step-11-auto-start.md)) — the core react/story/joke/prophecy/request/category pipeline runs without one.
 
 **Trigger**
 

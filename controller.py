@@ -50,7 +50,7 @@ def is_held(index: int) -> bool:
     """Return whether button ``index`` is currently held down.
 
     Unlike ``poll_pressed()``, this is a direct state check, not an
-    edge-triggered event -- for detecting a simultaneous combo (e.g. two
+    edge-triggered event -- for detecting a simultaneous combo (e.g., two
     buttons held together), where neither button's own press event is
     guaranteed to land in the same poll tick as the other's. Reflects
     whatever ``poll_pressed()`` most recently pumped, so call that first in
@@ -59,6 +59,25 @@ def is_held(index: int) -> bool:
     if _joystick is None:
         return False
     return bool(_joystick.get_button(index))
+
+
+def is_direction_held(direction: str) -> bool:
+    """Return whether the D-pad is currently pushed toward ``direction``
+    ("up"/"down"/"left"/"right").
+
+    Like ``is_held()``, a direct state check, not edge-triggered -- for
+    continuous per-tick effects (e.g., brew_game's heat drift while held),
+    where a single ``poll_pressed()`` event firing once on the initial push
+    isn't enough. Reflects whatever ``poll_pressed()`` most recently pumped,
+    so call that first in the same loop if you haven't already this tick.
+    """
+    if _joystick is None:
+        return False
+    axis = 0 if direction in ("left", "right") else 1
+    value = _joystick.get_axis(axis)
+    if abs(value) <= _AXIS_THRESHOLD:
+        return False
+    return _axis_direction(axis, value) == direction
 
 
 def poll_pressed() -> str | None:

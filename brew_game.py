@@ -1,9 +1,11 @@
 """Controller mini-game: keep the brew's heat and swirl in balance.
 
-Heat (button_1, red) and cool (button_0, blue) push the potion's temperature;
-straying from the sweet spot speeds up the swirl. The talons (button_4/
-button_5) both brake the swirl, and each also steers its direction toward
-itself. Boil over, freeze, or spin out of control and the brew is lost; hold
+D-pad up/down push the potion's temperature up/down -- same buttons as
+potion_play.py's heat control, held rather than tapped since here the
+temperature itself (not a discrete level) is what's being driven. Straying
+from the sweet spot speeds up the swirl. The talons (button_4/button_5)
+both brake the swirl, and each also steers its direction toward itself.
+Boil over, freeze, or spin out of control and the brew is lost; hold
 steady long enough and it's a win. The ring renders the state live: speckled
 colors sampled around a mean hue (blue/green/red for cold/ideal/hot) rotate
 around it at the current swirl speed and direction.
@@ -49,8 +51,6 @@ TARGET_SURVIVAL_SEC = 30.0  # Default win condition.
 Status = Literal["running", "victory", "failure"]
 Outcome = Literal["victory", "failure", "aborted"]
 
-_HEAT_UP_BUTTON = 1  # Red face button.
-_COOL_DOWN_BUTTON = 0  # Blue face button.
 _STIR_LEFT_BUTTON = 4  # Left talon.
 _STIR_RIGHT_BUTTON = 5  # Right talon.
 
@@ -167,11 +167,11 @@ def _hsv_to_rgb(hue: float, saturation: float, value: float) -> light_control.RG
 
 
 def _read_held() -> frozenset[str]:
-    """Translate the four control buttons' live state into control names."""
+    """Translate the four controls' live state into control names."""
     held: set[str] = set()
-    if controller.is_held(_HEAT_UP_BUTTON):
+    if controller.is_direction_held("up"):
         held.add("heat_up")
-    if controller.is_held(_COOL_DOWN_BUTTON):
+    if controller.is_direction_held("down"):
         held.add("cool_down")
     if controller.is_held(_STIR_LEFT_BUTTON):
         held.add("stir_left")
@@ -237,7 +237,7 @@ def main() -> None:
         raise SystemExit("No gamepad connected.")
 
     print(
-        f"Heat up: button_1 (red). Cool down: button_0 (blue). Stir: "
+        f"Heat up: D-pad up. Cool down: D-pad down. Stir: "
         f"button_4/button_5 (talons). Survive {TARGET_SURVIVAL_SEC:g}s to win. "
         f"Select+Start to quit early."
     )

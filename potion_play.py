@@ -12,7 +12,7 @@ dial, so each level's look and sound can be tuned and checked on its own.
 Runs until Select+Start is pressed again.
 
 The ambient bubbling sound plays continuously, including right through
-ingredient/amount callouts -- unlike the rest of the show, which always
+ingredient/heat/stir/rainbow/comet callouts -- unlike the rest of the show, which always
 silences its ambience before a voice line (see audio.play_file()'s
 docstring). That's because this mode's ambience runs as its own aplay
 subprocess rather than through pygame.mixer, so it never needs to be
@@ -475,7 +475,7 @@ def run(*, select_button: int = 8, start_button: int = 9) -> None:
     the whole ring would visibly freeze for that long on every callout.
     The two threads share ``state`` with no locking -- same informal,
     good-enough-for-a-visual-toy concurrency already used elsewhere in this
-    project (e.g. light_control's flicker/rainbow threads); a rare
+    project (e.g., light_control's flicker/rainbow threads); a rare
     half-applied update to a single float is imperceptible here.
 
     Also quits pygame's mixer for the whole session (restored on exit),

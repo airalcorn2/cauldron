@@ -47,7 +47,7 @@ sudo apt install -y evtest
 evtest /dev/input/by-id/*-event-joystick   # Pick your pad from the list if prompted.
 ```
 
-Press each button in turn and note the `code` name it prints for each one (e.g. `BTN_BASE4`).
+Press each button in turn and note the `code` name it prints for each one (e.g., `BTN_BASE4`).
 `systemd/triggerhappy-cauldron.conf` already has one line per button for this project's pad -- edit it to match your own pad's codes, one line per button, if yours differs.
 
 ```bash

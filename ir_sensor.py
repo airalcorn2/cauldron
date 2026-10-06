@@ -42,7 +42,7 @@ def wait_for_quiet(
     unattended. Call with a deadline of your own (or just interrupt the
     process) if that ever stops being true.
 
-    If ``abort`` is given and becomes set (e.g. a live mode switch), returns
+    If ``abort`` is given and becomes set (e.g., a live mode switch), returns
     immediately -- the caller is expected to check ``abort.is_set()`` itself
     to tell that apart from a normal, settled return.
     """
@@ -128,7 +128,7 @@ def wait_for_drops(
     leaving it running and only cutting it after the fact. No timeout, for
     the same reason as ``wait_for_quiet``.
 
-    If ``abort`` becomes set (e.g. a live mode switch), returns immediately
+    If ``abort`` becomes set (e.g., a live mode switch), returns immediately
     without calling ``on_drop``/``on_repeat`` for whatever was in progress --
     the caller is expected to check ``abort.is_set()`` itself.
     """

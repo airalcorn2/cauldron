@@ -38,7 +38,7 @@ class WitchProfile:
     voice_generator.VoiceSettings, which these become, for what each one does.
     """
 
-    name: str  # Display name, e.g. "Violet".
+    name: str  # Display name, e.g., "Violet".
     personality: str  # Short phrase folded into the Gemini prompts.
     # This witch's LED color, as plain (r, g, b) values rather than
     # light_control.py's RGB type, so this module stays free of any hardware

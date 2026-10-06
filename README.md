@@ -1,6 +1,6 @@
 # Interactive Halloween Cauldron
 
-[![Demo](image.png)](https://www.instagram.com/p/Dd9_cGcqTMs/)
+[![Demo](demo.png)](https://www.instagram.com/p/Dd9_cGcqTMs/)
 
 An interactive prop built on a Raspberry Pi.
 Drop some items into the cauldron and an IR beam break starts the sequence: the camera takes a photo, a vision model writes a three-line spell about what it sees, and three text-to-speech "witch" voices recite it with the LED ring set to each witch's color.
@@ -42,7 +42,8 @@ The mortal drops items in (holding a hand in the beam instead replays the reques
 One attempt only: success gets a triumphant spell and a green shimmer, anything less gets a comedic curse and a red fizzle.
 On an API failure the recipe falls back to a small built-in pool.
 
-**category** — like request, but the witches challenge a property instead of naming objects (e.g. "something round" or "something that makes noise") rather than a fixed list — the mortal picks what counts, and the model judges whatever lands against the property. Same wait/repeat-gesture/one-attempt mechanics and outcome lighting as request.
+**category** — like request, but the witches challenge a property instead of naming objects (e.g., "something round" or "something that makes noise") rather than a fixed list — the mortal picks what counts, and the model judges whatever lands against the property.
+Same wait/repeat-gesture/one-attempt mechanics and outcome lighting as request.
 
 ## Live Mode Switching
 
@@ -69,8 +70,8 @@ The LED ring mirrors all of this: a chasing rainbow during the intro and wheneve
 All of the witches' mode-selection lines are hand-written and cached to disk ahead of time (`generated/mode_select/`), so opening mode selection never waits on a network call.
 
 **brew** is different from the other six: it's a one-shot mini-game, not a persistent mode, so picking it doesn't change `--mode` — the show resumes whatever mode was active before once the round ends.
-It drops nothing in and takes no photo; instead, balance the potion's heat and swirl live on the LED ring using the gamepad alone.
-Red (`button_1`) heats it up, blue (`button_0`) cools it down — straying from the sweet spot speeds up the swirl, shown as a brighter band chasing around the ring.
+Nothing is dropped in and no photo is taken; instead, balance the potion's heat and swirl live on the LED ring using the gamepad alone.
+D-pad up heats it up, D-pad down cools it down (held, not tapped — same buttons as play's heat control, just continuous here instead of stepped) — straying from the sweet spot speeds up the swirl, shown as a brighter band chasing around the ring.
 The talons (`button_4`/`button_5`) brake the swirl and steer its direction; boil over, freeze, or spin out of control and the brew is lost, while holding steady for 30 seconds is a win.
 See `brew_game.py` for the full rules; run it directly to play a round without going through mode selection.
 

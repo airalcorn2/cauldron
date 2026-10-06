@@ -87,7 +87,7 @@ _ITEMS: tuple[str, ...] = tuple(
 
 # Category-mode challenges are sampled from this pool for the same reason
 # request-mode ingredients are: keeps successive rounds varied. Each line
-# completes "something ___", e.g. "round" -> "something round". See
+# completes "something ___", e.g., "round" -> "something round". See
 # categories.txt.
 _CATEGORIES_PATH = Path("categories.txt")
 _CATEGORIES: tuple[str, ...] = tuple(
@@ -240,7 +240,7 @@ class RoundResult:
 class Challenge:
     """Category mode: a property to satisfy, plus the witch lines that ask for it."""
 
-    category: str  # Completes "something ___", e.g. "round".
+    category: str  # Completes "something ___", e.g., "round".
     lines: dict[Witch, str]
     order: tuple[Witch, ...] = tuple(Witch)
 
@@ -302,7 +302,7 @@ def _random_order() -> tuple[Witch, ...]:
 
 
 def _order_text(order: tuple[Witch, ...]) -> str:
-    """Render an order for the prompt, e.g. ``Amber, then Hazel, then Violet``."""
+    """Render an order for the prompt, e.g., ``Amber, then Hazel, then Violet``."""
     return ", then ".join(witch.value.capitalize() for witch in order)
 
 

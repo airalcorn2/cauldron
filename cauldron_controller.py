@@ -39,7 +39,7 @@ Six modes, selected with ``--mode``:
 
   category
     Like request, but the witches challenge a property instead of naming
-    objects (e.g. "something round") -- the mortal picks what counts, and
+    objects (e.g., "something round") -- the mortal picks what counts, and
     the model judges whatever lands against the property rather than
     matching a fixed list. Same wait/repeat-gesture/one-attempt mechanics
     as request; see process_category_challenge() and
