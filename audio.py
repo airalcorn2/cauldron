@@ -107,6 +107,24 @@ def stop_bubbling() -> None:
     _laugh().stop()
 
 
+def set_ambience_intensity(level: float) -> None:
+    """Scale the already-playing bubbling/laugh loop's volume by ``level`` (0-1).
+
+    For brew_game.py: rather than swapping between separate pre-rendered
+    "calm"/"chaotic" sound files (no live pitch/speed-shifting exists here --
+    see play_file()'s docstring), the one existing ambience loop just gets
+    louder as the brew gets more out of control. pygame.mixer.Sound.set_volume()
+    is safe to call repeatedly on an already-playing Sound. No-op if bubbling
+    was never started (nothing to scale) or the mixer is currently quit --
+    same situations stop_bubbling() already guards against.
+    """
+    if pygame.mixer.get_init() is None:
+        return
+    level = max(0.0, min(1.0, level))
+    _bubble().set_volume(BUBBLE_VOLUME * (0.3 + 0.7 * level))
+    _laugh().set_volume(LAUGH_VOLUME * (0.2 + 0.8 * level))
+
+
 _INTERRUPT_POLL_SEC = 0.02
 
 

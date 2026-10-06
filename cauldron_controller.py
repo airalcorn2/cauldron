@@ -91,9 +91,11 @@ import RPi.GPIO as GPIO
 
 import actuator
 import audio
+import brew_game
 import controller
 import ir_sensor
 import light_control
+import potion_play
 import spell_generator
 from camera import capture_frame
 from voice_generator import (
@@ -125,7 +127,11 @@ HOLD_TO_REPEAT_SEC = 1.2  # Obstruct the beam this long to replay the request.
 # MODE_SELECT_OPTIONS below), and the mortal answers by pressing one of them.
 # button_0-3 are this pad's four face buttons, each a distinct physical
 # color (see BUTTON_COLORS); button_4/button_5 are the plain gray shoulder
-# buttons. Remap here if your pad differs.
+# buttons. "up"/"down" (the D-pad) are the two unused inputs left, so
+# they're "brew"'s and "play"'s buttons -- those modes are one-shot
+# mini-games rather than persistent modes (see _run_mode_selection()), so
+# they don't need one of the beam-triggered modes' buttons. Remap here if
+# your pad differs.
 MODE_BUTTONS: dict[str, str] = {
     "button_0": "react",
     "button_1": "story",
@@ -133,14 +139,16 @@ MODE_BUTTONS: dict[str, str] = {
     "button_3": "prophecy",
     "button_4": "request",
     "button_5": "category",
+    "up": "brew",
+    "down": "play",
 }
 
 # The ring shows one of these colors while listing/confirming each mode, so
 # the mortal sees a direct match to the button they're looking at. button_0-3
 # are this pad's actual face-button colors -- confirmed by running
 # `.venv/bin/python controller.py` and pressing each one. button_4/button_5
-# (the talons) are physically plain gray, so they're just assigned two more
-# colors here, distinct from the face buttons'.
+# (the talons) and "up"/"down" (the D-pad, physically unlit) are just
+# assigned colors here, distinct from the face buttons' and each other's.
 BUTTON_COLORS: dict[str, light_control.RGB] = {
     "button_0": light_control.RGB(30, 90, 255),  # Blue
     "button_1": light_control.RGB(220, 20, 20),  # Red
@@ -148,6 +156,8 @@ BUTTON_COLORS: dict[str, light_control.RGB] = {
     "button_3": light_control.RGB(60, 200, 40),  # Green
     "button_4": light_control.RGB(0, 220, 220),  # Cyan
     "button_5": light_control.RGB(255, 130, 0),  # Orange
+    "up": light_control.RGB(200, 0, 160),  # Magenta
+    "down": light_control.RGB(255, 255, 255),  # White
 }
 
 # Mode -> ring color, derived from BUTTON_COLORS. Shown steady while that
@@ -220,13 +230,19 @@ def _mode_select_confirm_path(witch: Witch, mode: str) -> Path:
     return MODE_SELECT_DIR / f"{witch}_{mode}.mp3"
 
 
+def _brew_outcome_path(witch: Witch, outcome: str) -> Path:
+    return MODE_SELECT_DIR / f"{witch}_brew_{outcome}.mp3"
+
+
 def _ensure_mode_select_cache() -> None:
-    """Synthesize any missing mode-select voice lines, so selection is instant.
+    """Synthesize any missing mode-select/brew-outcome voice lines, so both
+    are instant.
 
     Called once from main(), before the trigger loop starts, if a gamepad is
-    connected. The 39 lines (3 intros + 18 options + 18 confirmations)
-    essentially never change once written, so a normal run just confirms the
-    cache is complete and does nothing.
+    connected. The 57 lines (3 intros + 24 options + 24 confirmations + 6
+    brew outcomes -- "play" has no outcome lines, there's nothing to win or
+    lose) essentially never change once written, so a normal run just
+    confirms the cache is complete and does nothing.
     """
     missing: list[tuple[str, VoiceProfile, Path]] = []
     for witch in Witch:
@@ -241,6 +257,13 @@ def _ensure_mode_select_cache() -> None:
             confirm_path = _mode_select_confirm_path(witch, mode)
             if not confirm_path.exists():
                 missing.append((text, VOICES[witch], confirm_path))
+        for outcome, text in (
+            ("victory", WITCHES[witch].brew_victory),
+            ("failure", WITCHES[witch].brew_failure),
+        ):
+            outcome_path = _brew_outcome_path(witch, outcome)
+            if not outcome_path.exists():
+                missing.append((text, VOICES[witch], outcome_path))
 
     if len(missing) == 0:
         return
@@ -342,6 +365,7 @@ def _run_mode_selection() -> None:
     print("Controller: mode-select combo pressed.")
     _mode_switch_abort.set()
     _stop_ambience()
+    previous_mode = _pending_mode
 
     witch = random.choice(list(Witch))
     selected: str | None = None
@@ -384,6 +408,19 @@ def _run_mode_selection() -> None:
         _mode_select_confirm_path(witch, selected), volume=audio.WITCH_VOLUMES[witch]
     )
     light_control.leds_off()
+
+    if selected in ("brew", "play"):
+        # One-shot mini-games/activities, not persistent modes: run it right
+        # now and leave _pending_mode as it was, so the beam-triggered loop
+        # in main() resumes whatever mode was active before this detour.
+        if selected == "brew":
+            process_brew_game()
+        else:
+            process_potion_play()
+        _pending_mode = previous_mode
+        light_control.start_rainbow()  # Back to idle.
+        return
+
     light_control.start_rainbow()  # Back to idle.
     print(f"Controller: switched to {selected} mode.")
 
@@ -788,6 +825,42 @@ def process_category_challenge(*, strict: bool, paid_voices: bool = False) -> No
         _stop_ambience()
 
 
+def process_brew_game() -> None:
+    """The "brew" mini-game: balance heat and swirl using the gamepad alone.
+
+    No camera, no actuator -- nothing is dropped in, so there's nothing to
+    photograph or dump. See brew_game.run() for the game loop itself; this
+    just picks a witch to announce the outcome and lights the matching cue.
+    """
+    print("Brewing game: balance the heat and the swirl.")
+    witch = random.choice(list(Witch))
+    outcome = brew_game.run(select_button=_SELECT_BUTTON, start_button=_START_BUTTON)
+    if outcome == "aborted":
+        print("Brewing game interrupted by mode switch.\n")
+        return
+
+    audio.play_file(
+        _brew_outcome_path(witch, outcome), volume=audio.WITCH_VOLUMES[witch]
+    )
+    if outcome == "victory":
+        light_control.celebrate()
+        print("Brewing game complete: victory.\n")
+    else:
+        light_control.fizzle()
+        print("Brewing game complete: failure.\n")
+
+
+def process_potion_play() -> None:
+    """The "play" mini-mode: no game, just manipulate the lights for fun.
+
+    No win, no lose, no outcome line -- see potion_play.run(), which blocks
+    until the mortal presses Select+Start again to leave.
+    """
+    print("Potion play: no pressure, just lights.")
+    potion_play.run(select_button=_SELECT_BUTTON, start_button=_START_BUTTON)
+    print("Potion play complete.\n")
+
+
 def main(
     *,
     mode: str = "react",
@@ -811,6 +884,7 @@ def main(
 
     if controller.setup():
         _ensure_mode_select_cache()
+        potion_play.ensure_cache()
         threading.Thread(target=_watch_controller, daemon=True).start()
         print("Live mode switching enabled via the USB gamepad.")
 
@@ -867,6 +941,13 @@ def main(
     finally:
         wait_for_stage_dump()  # Don't cut power to the motor mid-stroke.
         light_control.stop_rainbow()
+        # Unconditional, not just a consequence of stop_rainbow(): if
+        # shutdown lands mid mode-select (a daemon thread painting solid
+        # colors directly, not through the rainbow thread), that thread is
+        # killed with no chance to blank the ring itself, and
+        # stop_rainbow() is a no-op since the rainbow was already stopped
+        # for the menu -- leaving a stray color lit forever otherwise.
+        light_control.leds_off()
         GPIO.cleanup()
 
 

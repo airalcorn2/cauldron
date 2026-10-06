@@ -20,6 +20,7 @@ import argparse
 import colorsys
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from rpi_ws281x import Color, PixelStrip
@@ -108,6 +109,21 @@ def set_leds(color: RGB) -> None:
     packed = color.packed()
     for i in range(_strip.numPixels()):
         _strip.setPixelColor(i, packed)
+    _strip.show()
+
+
+def set_pixels(colors: Sequence[RGB]) -> None:
+    """Paint each pixel its own color in one frame.
+
+    ``colors[i]`` goes to pixel ``i``; any pixels beyond ``len(colors)`` are
+    left at whatever they last held. For brew_game.py's per-pixel rendering,
+    which (unlike set_leds()) needs a different color at every position
+    around the ring rather than one solid fill.
+    """
+    if _strip is None:
+        return  # setup() has not run yet.
+    for i, color in enumerate(colors):
+        _strip.setPixelColor(i, color.packed())
     _strip.show()
 
 

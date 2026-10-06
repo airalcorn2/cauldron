@@ -61,6 +61,27 @@ class WitchProfile:
     mode_select_intro: str
     mode_select_options: dict[str, str]
     mode_select_confirmations: dict[str, str]
+    # Hand-written lines for the "brew" mini-game's outcome (see
+    # brew_game.py / cauldron_controller.process_brew_game()), spoken by
+    # whichever witch asked the mode-select question. Also cached, never
+    # generated live -- there's no photo to react to, so a vision-model
+    # spell doesn't apply here.
+    brew_victory: str
+    brew_failure: str
+    # Hand-written lines for the "play" mini-mode (see potion_play.py):
+    # one per ingredient (keyed "{color}_{index}", 6 each for blue/red/
+    # yellow/green -- a shared name list wrapped in this witch's own
+    # phrasing, not independently written per witch), one per heat level
+    # (3, index 0-2, none/medium/vigorous), one for stirring (either talon
+    # -- direction isn't narrated, just the gesture), and one each for the
+    # two special ingredients (D-pad left/right): a rainbow (floods every
+    # pixel at once) and a comet (sweeps around, clearing tint as it
+    # passes). Also cached, never generated live.
+    potion_ingredients: dict[str, str]
+    potion_heat: list[str]
+    potion_stir: str
+    potion_rainbow: str
+    potion_comet: str
     speed: float = 1.0
     use_speaker_boost: bool = True
     # Per-witch playback volume, since some voices render quieter than others
@@ -90,7 +111,7 @@ WITCHES: dict[Witch, WitchProfile] = {
         similarity_boost=0.75,
         style=0.35,
         mode_select_intro=(
-            "Ahh, a mortal seeks to alter the ritual! Behold the six runes "
+            "Ahh, a mortal seeks to alter the ritual! Behold the eight runes "
             "upon your magic tablet."
         ),
         mode_select_options={
@@ -100,6 +121,8 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "Tap the green rune for a prophecy.",
             "request": "Press the left talon to fetch ingredients.",
             "category": "Press the right talon for a challenge of properties.",
+            "brew": "Tap the upper rune to test your mastery of the brew.",
+            "play": "Tap the lower rune to simply play with the light.",
         },
         mode_select_confirmations={
             "react": "The spell-rune it is. Drop your offering, and I shall weave it into verse.",
@@ -108,7 +131,45 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "The prophecy-rune it is. The omens shall now be read.",
             "request": "The left talon it is. We shall name our price in ingredients.",
             "category": "The right talon it is. A riddle of properties awaits you.",
+            "brew": "The upper rune it is. Balance the fire and the froth, or the cauldron shall have its due.",
+            "play": "The lower rune it is. Let the colors answer to your hand, with no price to pay.",
         },
+        brew_victory="Magnificent! The brew holds steady -- you are a true alchemist.",
+        brew_failure="Alas, the brew is lost. The fire and the froth answer to no one tonight.",
+        potion_ingredients={
+            "blue_0": "Ahh, frost lily petals!",
+            "blue_1": "Ahh, moonstone dust!",
+            "blue_2": "Ahh, sapphire beetle shells!",
+            "blue_3": "Ahh, winter wisp essence!",
+            "blue_4": "Ahh, blueberry eyeballs!",
+            "blue_5": "Ahh, icicle shavings!",
+            "red_0": "Ahh, dragon's blood resin!",
+            "red_1": "Ahh, redcap mushroom caps!",
+            "red_2": "Ahh, phoenix feather ash!",
+            "red_3": "Ahh, crimson scorpion venom!",
+            "red_4": "Ahh, firebrand chili dust!",
+            "red_5": "Ahh, goblin's blush powder!",
+            "yellow_0": "Ahh, goblin gold flakes!",
+            "yellow_1": "Ahh, sulfur brimstone!",
+            "yellow_2": "Ahh, canary feather down!",
+            "yellow_3": "Ahh, lemon pixie dust!",
+            "yellow_4": "Ahh, sunflower witch pollen!",
+            "yellow_5": "Ahh, amber resin shavings!",
+            "green_0": "Ahh, goblin snot!",
+            "green_1": "Ahh, swamp moss spores!",
+            "green_2": "Ahh, venomous nettle leaves!",
+            "green_3": "Ahh, emerald beetle wings!",
+            "green_4": "Ahh, toadstool spores!",
+            "green_5": "Ahh, nightshade clippings!",
+        },
+        potion_heat=[
+            "The flame dies to nothing.",
+            "A gentle simmer takes hold.",
+            "A furious, roiling boil!",
+        ],
+        potion_stir="Ahh, give it a stir!",
+        potion_rainbow="Ahh, a rainbow of colors!",
+        potion_comet="Ahh, a comet streaks through, wiping the slate clean!",
         speed=0.95,
         volume=0.65,
     ),
@@ -122,7 +183,7 @@ WITCHES: dict[Witch, WitchProfile] = {
         similarity_boost=0.75,
         style=0.45,
         mode_select_intro=(
-            "Ooh, somebody wants options! Check it, your tablet's got six runes."
+            "Ooh, somebody wants options! Check it, your tablet's got eight runes."
         ),
         mode_select_options={
             "react": "Blue's for a spell.",
@@ -131,6 +192,8 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "Green's for a prophecy.",
             "request": "Left talon if you wanna fetch stuff.",
             "category": "Right talon for a challenge.",
+            "brew": "Upper rune's the brewing game.",
+            "play": "Lower rune's just for playing around.",
         },
         mode_select_confirmations={
             "react": "Spell mode, got it. Toss something in and let's see what magic we cook up.",
@@ -139,7 +202,45 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "Prophecy mode, ooh spooky. Let's peek at your future.",
             "request": "Fetching mode. Get ready, I'm gonna make you work for it.",
             "category": "Challenge mode. Let's see if you can actually pull this off.",
+            "brew": "Brewing game, let's go. Keep it together or it's gonna get messy.",
+            "play": "Play mode, nice and chill. Go wild, no pressure.",
         },
+        brew_victory="Whoa, you actually did it! Master alchemist right here.",
+        brew_failure="Yikes, it blew up. Better luck next time, rookie.",
+        potion_ingredients={
+            "blue_0": "Ooh, frost lily petals!",
+            "blue_1": "Ooh, moonstone dust!",
+            "blue_2": "Ooh, sapphire beetle shells!",
+            "blue_3": "Ooh, winter wisp essence!",
+            "blue_4": "Ooh, blueberry eyeballs!",
+            "blue_5": "Ooh, icicle shavings!",
+            "red_0": "Ooh, dragon's blood resin!",
+            "red_1": "Ooh, redcap mushroom caps!",
+            "red_2": "Ooh, phoenix feather ash!",
+            "red_3": "Ooh, crimson scorpion venom!",
+            "red_4": "Ooh, firebrand chili dust!",
+            "red_5": "Ooh, goblin's blush powder!",
+            "yellow_0": "Ooh, goblin gold flakes!",
+            "yellow_1": "Ooh, sulfur brimstone!",
+            "yellow_2": "Ooh, canary feather down!",
+            "yellow_3": "Ooh, lemon pixie dust!",
+            "yellow_4": "Ooh, sunflower witch pollen!",
+            "yellow_5": "Ooh, amber resin shavings!",
+            "green_0": "Ooh, goblin snot!",
+            "green_1": "Ooh, swamp moss spores!",
+            "green_2": "Ooh, venomous nettle leaves!",
+            "green_3": "Ooh, emerald beetle wings!",
+            "green_4": "Ooh, toadstool spores!",
+            "green_5": "Ooh, nightshade clippings!",
+        },
+        potion_heat=[
+            "Flame's out.",
+            "Ooh, a nice simmer.",
+            "Whoa, full boil!",
+        ],
+        potion_stir="Ooh, stir it up!",
+        potion_rainbow="Ooh, a whole rainbow!",
+        potion_comet="Ooh, a comet! Watch it clean house!",
         speed=1.0,
         volume=0.65,
     ),
@@ -153,7 +254,7 @@ WITCHES: dict[Witch, WitchProfile] = {
         similarity_boost=0.7,
         style=0.3,
         mode_select_intro=(
-            "Hmph. Changing the ritual, are we. Six choices on that little "
+            "Hmph. Changing the ritual, are we. Eight choices on that little "
             "tablet of yours."
         ),
         mode_select_options={
@@ -163,6 +264,8 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "Green rune, for a prophecy.",
             "request": "Left talon, to fetch ingredients.",
             "category": "Right talon, for a challenge.",
+            "brew": "Upper rune, if you fancy yourself a brewer.",
+            "play": "Lower rune, if you just want to fiddle with it.",
         },
         mode_select_confirmations={
             "react": "Spell mode. Fine. Give me something to work with.",
@@ -171,7 +274,45 @@ WITCHES: dict[Witch, WitchProfile] = {
             "prophecy": "Prophecy mode. The future rarely flatters anyone.",
             "request": "Fetching mode. Go on then, don't keep me waiting.",
             "category": "Challenge mode. Let's see if you're clever enough.",
+            "brew": "Brewing game. Hmph. Let's see if you've got the hands for it.",
+            "play": "Playtime. Hmph. Fine, amuse yourself.",
         },
+        brew_victory="Well. You kept it from boiling over. Don't let it go to your head.",
+        brew_failure="Ruined. Hmph. I expected as much.",
+        potion_ingredients={
+            "blue_0": "Frost lily petals. Hmph.",
+            "blue_1": "Moonstone dust. Hmph.",
+            "blue_2": "Sapphire beetle shells. Hmph.",
+            "blue_3": "Winter wisp essence. Hmph.",
+            "blue_4": "Blueberry eyeballs. Hmph.",
+            "blue_5": "Icicle shavings. Hmph.",
+            "red_0": "Dragon's blood resin. Hmph.",
+            "red_1": "Redcap mushroom caps. Hmph.",
+            "red_2": "Phoenix feather ash. Hmph.",
+            "red_3": "Crimson scorpion venom. Hmph.",
+            "red_4": "Firebrand chili dust. Hmph.",
+            "red_5": "Goblin's blush powder. Hmph.",
+            "yellow_0": "Goblin gold flakes. Hmph.",
+            "yellow_1": "Sulfur brimstone. Hmph.",
+            "yellow_2": "Canary feather down. Hmph.",
+            "yellow_3": "Lemon pixie dust. Hmph.",
+            "yellow_4": "Sunflower witch pollen. Hmph.",
+            "yellow_5": "Amber resin shavings. Hmph.",
+            "green_0": "Goblin snot. Hmph.",
+            "green_1": "Swamp moss spores. Hmph.",
+            "green_2": "Venomous nettle leaves. Hmph.",
+            "green_3": "Emerald beetle wings. Hmph.",
+            "green_4": "Toadstool spores. Hmph.",
+            "green_5": "Nightshade clippings. Hmph.",
+        },
+        potion_heat=[
+            "No flame. Fine.",
+            "A simmer. Hmph.",
+            "A boil. Don't say I didn't warn you.",
+        ],
+        potion_stir="Stirring. Fine.",
+        potion_rainbow="A rainbow. Fine, showy.",
+        potion_comet="A comet. Hmph, clearing the mess.",
         speed=0.92,
         volume=1.5,  # Renders quieter than Violet/Amber at the same settings.
     ),
