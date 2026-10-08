@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import colorsys
+import random
 import threading
 import time
 from collections.abc import Sequence
@@ -48,6 +49,8 @@ class RGB:
 BLACK = RGB(0, 0, 0)
 GREEN = RGB(60, 200, 40)  # Success shimmer.
 RED = RGB(220, 20, 20)  # Failure fade.
+GOLD = RGB(255, 190, 30)  # victory_swirl()'s comet color.
+SPARKLE = RGB(255, 255, 255)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +93,11 @@ _flicker_thread: threading.Thread | None = None
 _flicker_stop: threading.Event | None = None
 _rainbow_thread: threading.Thread | None = None
 _rainbow_stop: threading.Event | None = None
+# Whatever set_leds()/set_pixels() last painted, so fade_to_black() can fade
+# out of it -- e.g. brew_game.py's live render, left on the ring after a
+# round ends (see run()) -- without needing to read pixel state back from
+# the strip itself.
+_last_colors: list[RGB] = []
 
 
 def setup() -> None:
@@ -104,12 +112,14 @@ def setup() -> None:
 
 def set_leds(color: RGB) -> None:
     """Fill the ring with a single color."""
+    global _last_colors
     if _strip is None:
         return  # setup() has not run yet.
     packed = color.packed()
     for i in range(_strip.numPixels()):
         _strip.setPixelColor(i, packed)
     _strip.show()
+    _last_colors = [color] * _strip.numPixels()
 
 
 def set_pixels(colors: Sequence[RGB]) -> None:
@@ -120,11 +130,13 @@ def set_pixels(colors: Sequence[RGB]) -> None:
     which (unlike set_leds()) needs a different color at every position
     around the ring rather than one solid fill.
     """
+    global _last_colors
     if _strip is None:
         return  # setup() has not run yet.
     for i, color in enumerate(colors):
         _strip.setPixelColor(i, color.packed())
     _strip.show()
+    _last_colors = list(colors)
 
 
 def set_brightness(value: int) -> None:
@@ -154,6 +166,61 @@ def fizzle(steps: int = 14, interval: float = 0.07) -> None:
         set_leds(RED.scaled(step / steps))
         time.sleep(interval)
     leds_off()
+
+
+def fade_to_black(steps: int = 20, interval: float = 0.05) -> None:
+    """Fade whatever's currently on the ring down to off, in place.
+
+    Unlike fizzle() (which fades a fixed red, for a judged failure), this
+    fades out of whatever set_leds()/set_pixels() last painted -- for
+    brew_game.py's failure outcome, that's the brew's own last rendered
+    frame, left showing through the witch's line (see brew_game.run())
+    rather than snapped to black the instant the round ends.
+    """
+    start = _last_colors
+    if not start:
+        leds_off()
+        return
+    for step in range(steps, -1, -1):
+        factor = step / steps
+        set_pixels([color.scaled(factor) for color in start])
+        time.sleep(interval)
+    leds_off()
+
+
+def victory_swirl(loops: int = 3, trail_length: int = 18) -> None:
+    """A one-shot magical flourish for an outright win.
+
+    Deliberately distinct from every other effect in this file: a gold
+    comet sweeps the ring with a fading trail and scattered white
+    sparkle flecks, accelerating lap over lap, then the whole ring
+    flashes gold-white before fading out -- unlike celebrate()'s flat
+    green blink (used for request/category's photo-judged wins),
+    fizzle()'s flat color fade, start_rainbow()'s steady full-spectrum
+    chase, or potion_play.py's comet (a single sweep that clears color
+    rather than adding a trail). Reserved for brew_game.py's victory
+    outcome.
+    """
+    if _strip is None:
+        return
+    count = _strip.numPixels()
+    for lap in range(loops):
+        interval = 0.03 / (lap + 1)  # Each lap faster than the last.
+        for i in range(count):
+            colors = [BLACK] * count
+            for t in range(trail_length):
+                colors[(i - t) % count] = GOLD.scaled(1.0 - t / trail_length)
+            for _ in range(2):
+                if random.random() < 0.25:
+                    colors[random.randrange(count)] = SPARKLE
+            set_pixels(colors)
+            time.sleep(interval)
+    for _ in range(3):
+        set_leds(SPARKLE)
+        time.sleep(0.08)
+        set_leds(GOLD)
+        time.sleep(0.08)
+    fade_to_black()
 
 
 def start_flicker(interval: float = 0.08) -> None:

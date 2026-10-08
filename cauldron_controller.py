@@ -218,6 +218,30 @@ def _stop_ambience() -> None:
     audio.stop_bubbling()
 
 
+def _start_idle() -> None:
+    """Resume the idle chasing rainbow with soft bubbling underneath it --
+    a fireplace-like ambiance for the show's resting state, rather than
+    dead silence. Medium bubbling level and no witch laugh (see
+    audio.IDLE_BUBBLE_VOLUME) -- that laugh is the "something's brewing"
+    cue for an active API wait (see _start_ambience()), not a fitting
+    sound for just sitting idle. Only call this where the rainbow would
+    otherwise run alone for a genuine, possibly-unbounded idle wait; not
+    right before a voice line that's about to play immediately
+    (audio.play_file() requires bubbling already stopped before it plays
+    a line -- see its docstring -- so starting it here would just mean
+    stopping it again a moment later, same bug class as potion_play.py's
+    mixer-quit overhead).
+    """
+    light_control.start_rainbow()
+    audio.start_bubbling(laugh=False, volume=audio.IDLE_BUBBLE_VOLUME)
+
+
+def _stop_idle() -> None:
+    """Stop the idle rainbow and its bubbling. Safe to call any time."""
+    light_control.stop_rainbow()
+    audio.stop_bubbling()
+
+
 def _mode_select_intro_path(witch: Witch) -> Path:
     return MODE_SELECT_DIR / f"{witch}_intro.mp3"
 
@@ -315,20 +339,20 @@ def _wait_for_mode_selection(witch: Witch) -> str:
                 nav = pressed
         return (selected is not None) or (nav is not None)
 
-    light_control.start_rainbow()
+    _start_idle()
     while True:
         if selected is not None:
-            light_control.stop_rainbow()
+            _stop_idle()
             return selected
         if nav is None:
             if not check_input():
                 time.sleep(0.02)
                 continue
             if selected is not None:
-                light_control.stop_rainbow()
+                _stop_idle()
                 return selected
 
-        light_control.stop_rainbow()
+        _stop_idle()
         index = (index + (1 if nav == "right" else -1)) % len(modes)
         nav = None
         light_control.set_leds(MODE_COLORS[modes[index]])
@@ -338,7 +362,7 @@ def _wait_for_mode_selection(witch: Witch) -> str:
             should_stop=check_input,
         )
         if (selected is None) and (nav is None):
-            light_control.start_rainbow()
+            _start_idle()
 
 
 def _run_mode_selection() -> None:
@@ -418,10 +442,10 @@ def _run_mode_selection() -> None:
         else:
             process_potion_play()
         _pending_mode = previous_mode
-        light_control.start_rainbow()  # Back to idle.
+        _start_idle()  # Back to idle.
         return
 
-    light_control.start_rainbow()  # Back to idle.
+    _start_idle()  # Back to idle.
     print(f"Controller: switched to {selected} mode.")
 
 
@@ -829,8 +853,11 @@ def process_brew_game() -> None:
     """The "brew" mini-game: balance heat and swirl using the gamepad alone.
 
     No camera, no actuator -- nothing is dropped in, so there's nothing to
-    photograph or dump. See brew_game.run() for the game loop itself; this
-    just picks a witch to announce the outcome and lights the matching cue.
+    photograph or dump. See brew_game.run() for the game loop itself, which
+    leaves the ring showing its last rendered frame rather than blanking it;
+    this picks a witch to announce the outcome over that frame, then plays
+    the matching follow-up -- light_control.victory_swirl() or
+    fade_to_black() -- only after she's spoken.
     """
     print("Brewing game: balance the heat and the swirl.")
     witch = random.choice(list(Witch))
@@ -843,10 +870,10 @@ def process_brew_game() -> None:
         _brew_outcome_path(witch, outcome), volume=audio.WITCH_VOLUMES[witch]
     )
     if outcome == "victory":
-        light_control.celebrate()
+        light_control.victory_swirl()
         print("Brewing game complete: victory.\n")
     else:
-        light_control.fizzle()
+        light_control.fade_to_black()
         print("Brewing game complete: failure.\n")
 
 
@@ -892,12 +919,12 @@ def main(
     print(f"{prefix}Cauldron ready in {mode} mode. Break the beam to begin.")
 
     last_trigger = 0.0
-    light_control.start_rainbow()
+    _start_idle()
     try:
         while True:
             if ir_sensor.beam_broken() and (time.time() - last_trigger > DEBOUNCE_SEC):
                 last_trigger = time.time()
-                light_control.stop_rainbow()
+                _stop_idle()
                 _mode_switch_abort.clear()
                 active_mode = _pending_mode
                 if active_mode == "request":
@@ -931,7 +958,7 @@ def main(
                 if once and (not _mode_switch_abort.is_set()):
                     print("Smoke test PASSED.")
                     return
-                light_control.start_rainbow()
+                _start_idle()
 
             time.sleep(0.05)
 
@@ -940,7 +967,7 @@ def main(
 
     finally:
         wait_for_stage_dump()  # Don't cut power to the motor mid-stroke.
-        light_control.stop_rainbow()
+        _stop_idle()
         # Unconditional, not just a consequence of stop_rainbow(): if
         # shutdown lands mid mode-select (a daemon thread painting solid
         # colors directly, not through the rainbow thread), that thread is

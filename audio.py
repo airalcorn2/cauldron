@@ -43,6 +43,11 @@ LAUGH_SFX_PATH = ASSETS_DIR / "witch-laugh.wav"
 # --laugh-volume on the --ambience test below rather than guessing blind.
 BUBBLE_VOLUME: float = 1.0
 LAUGH_VOLUME: float = 0.3
+# Medium bubbling level -- for cauldron_controller's idle ambience (just a
+# background fireplace-like presence while the rainbow chases, not the
+# "something's brewing" cue used while actually waiting on an API call, so
+# no laugh plays alongside it either -- see start_bubbling()'s ``laugh``).
+IDLE_BUBBLE_VOLUME: float = 0.55
 
 # Default witch-line (TTS) playback volume, used by the CLI test below when
 # no specific witch is given. The live show instead uses WITCH_VOLUMES, so
@@ -80,16 +85,24 @@ def _laugh() -> pygame.mixer.Sound:
     return _laugh_sfx
 
 
-def start_bubbling() -> None:
-    """Start the bubbling cauldron loop, with a witch's laugh looping over it.
+def start_bubbling(laugh: bool = True, volume: float | None = None) -> None:
+    """Start the bubbling cauldron loop, optionally with a witch's laugh
+    looping over it.
 
-    No-op if bubbling is already playing. The laugh runs on its own mixer
-    channel so it overlaps the bubbling loop rather than interrupting it.
+    No-op if bubbling is already playing -- note that means a call with a
+    different ``laugh``/``volume`` while it's already running has no
+    effect; stop_bubbling() first if the caller needs to change either. The
+    laugh runs on its own mixer channel so it overlaps the bubbling loop
+    rather than interrupting it. ``volume`` defaults to BUBBLE_VOLUME, but
+    is always applied explicitly (not just at the Sound's first load) so a
+    caller that previously set a custom volume doesn't leak into the next.
     """
     sfx = _bubble()
     if sfx.get_num_channels() == 0:
+        sfx.set_volume(BUBBLE_VOLUME if volume is None else volume)
         sfx.play(loops=-1)
-        _laugh().play(loops=-1)
+        if laugh:
+            _laugh().play(loops=-1)
 
 
 def stop_bubbling() -> None:

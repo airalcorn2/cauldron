@@ -45,6 +45,20 @@ On an API failure the recipe falls back to a small built-in pool.
 **category** — like request, but the witches challenge a property instead of naming objects (e.g., "something round" or "something that makes noise") rather than a fixed list — the mortal picks what counts, and the model judges whatever lands against the property.
 Same wait/repeat-gesture/one-attempt mechanics and outcome lighting as request.
 
+**brew** and **play** exist alongside these six but aren't `--mode` options — they're one-shot gamepad detours, reached live (see [Live Mode Switching](#live-mode-switching) below) rather than started from the command line.
+
+**brew** is a one-shot mini-game, not a persistent mode, so picking it doesn't change `--mode` — the show resumes whatever mode was active before once the round ends.
+Nothing is dropped in and no photo is taken; instead, balance the potion's heat and swirl live on the LED ring using the gamepad alone.
+D-pad up heats it up, D-pad down cools it down (held, not tapped — same buttons as play's heat control, just continuous here instead of stepped) — straying from the sweet spot speeds up the swirl, shown as a brighter band chasing around the ring.
+The talons (`button_4`/`button_5`) brake the swirl and steer its direction; boil over, freeze, or spin out of control and the brew is lost, while holding steady for 30 seconds is a win.
+See `brew_game.py` for the full rules; run it directly to play a round without going through mode selection.
+
+**play** is also a one-shot detour, not a persistent mode — but it's a sandbox, not a game: no winning, losing, or timing out, just manipulating the potion for fun.
+Face buttons sprinkle that color into the potion, accumulating permanently; D-pad left floods the whole ring with a rainbow, and D-pad right sends a comet sweeping once around, clearing colors as it passes.
+The talons give the potion a quick stir that settles back down on its own, and D-pad up/down steps through three heat levels, each with its own bubbling look and volume.
+Every action is interruptible — mashing buttons quickly only narrates the last one, not a backlog of all of them — and announced by a randomly chosen witch each time.
+See `potion_play.py` for the full rules; run it directly without going through mode selection.
+
 ## Live Mode Switching
 
 Plug in a USB gamepad (SNES-style clones work fine — run `controller.py` directly to confirm your pad's button mapping) and the mode can be changed without restarting the process.
@@ -60,26 +74,15 @@ A random witch asks which mode to pick, naming each button in-universe:
 | Green face button | prophecy |
 | Left shoulder button ("left talon") | request |
 | Right shoulder button ("right talon") | category |
-| D-pad up ("upper rune") | brew (see below) |
-| D-pad down ("lower rune") | play (see below) |
+| D-pad up ("upper rune") | brew |
+| D-pad down ("lower rune") | play |
 
 Press a mode's button at any point — even mid-sentence — to pick it immediately.
 Otherwise, once the witch finishes listing them, left/right on the D-pad browses back through the options, replaying each one's line, before committing.
 The LED ring mirrors all of this: a chasing rainbow during the intro and whenever idle (including between rounds), each mode's own fixed color while it's being named or confirmed, then back to the rainbow once a mode is chosen.
+Picking **brew** or **play** this way runs that round immediately and returns to whatever mode was active before — see [Modes](#modes) above for what each one does.
 
 All of the witches' mode-selection lines are hand-written and cached to disk ahead of time (`generated/mode_select/`), so opening mode selection never waits on a network call.
-
-**brew** is different from the other six: it's a one-shot mini-game, not a persistent mode, so picking it doesn't change `--mode` — the show resumes whatever mode was active before once the round ends.
-Nothing is dropped in and no photo is taken; instead, balance the potion's heat and swirl live on the LED ring using the gamepad alone.
-D-pad up heats it up, D-pad down cools it down (held, not tapped — same buttons as play's heat control, just continuous here instead of stepped) — straying from the sweet spot speeds up the swirl, shown as a brighter band chasing around the ring.
-The talons (`button_4`/`button_5`) brake the swirl and steer its direction; boil over, freeze, or spin out of control and the brew is lost, while holding steady for 30 seconds is a win.
-See `brew_game.py` for the full rules; run it directly to play a round without going through mode selection.
-
-**play** is also a one-shot detour, not a persistent mode — but it's a sandbox, not a game: no winning, losing, or timing out, just manipulating the potion for fun.
-Face buttons sprinkle that color into the potion, accumulating permanently; D-pad left floods the whole ring with a rainbow, and D-pad right sends a comet sweeping once around, clearing colors as it passes.
-The talons give the potion a quick stir that settles back down on its own, and D-pad up/down steps through three heat levels, each with its own bubbling look and volume.
-Every action is interruptible — mashing buttons quickly only narrates the last one, not a backlog of all of them — and announced by a randomly chosen witch each time.
-See `potion_play.py` for the full rules; run it directly without going through mode selection.
 
 ## Software Layout
 

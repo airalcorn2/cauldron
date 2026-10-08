@@ -66,24 +66,15 @@ _RIGHT_TALON = 5
 
 INGREDIENTS_PER_COLOR = 6
 
-# Tuning, found by feel -- same "expect to retune" convention as brew_game.py.
-# A real playtest found the first-draft sprinkle barely perceptible and the
-# stir taking too long to settle; both retuned from their first-draft values.
-# (A per-press "amount" dial used to scale these -- removed once rapid-fire
-# interrupting sprinkles made repeatedly tapping the same color a simpler
-# way to build up intensity.)
+# Tuning, found by feel.
 SPRINKLE_FRACTION = 0.4  # Fraction of pixels hit per sprinkle.
 SPRINKLE_INCREMENT = 150.0  # Per-channel add per sprinkle.
 # Raw tint magnitude (a pixel's peak channel) at which the white shimmer is
-# about 2/3 replaced by the sprinkled color -- see render(). One middle
-# sprinkle alone already reaches ~78% here, matching the "colors looked
-# good" baseline from before tint became unbounded.
+# about 2/3 replaced by the sprinkled color -- see render().
 TINT_SATURATION_SCALE = 100.0
 # A fully-sprinkled pixel's peak channel normalizes to this, not 255 -- see
 # render(). Reserves (255 - this) of real brightness headroom so a pop has
-# somewhere to visibly go even on an already fully-colored pixel. A real
-# playtest found 200 (55 of headroom, a ~27% jump) still too subtle to
-# clearly register as "bubbling" against an already-bright background.
+# somewhere to visibly go even on an already fully-colored pixel.
 BASE_PEAK_BRIGHTNESS = 130.0
 STIR_IMPULSE = 1.5  # Added to spin per talon tap.
 STIR_DECAY_PER_SEC = 1.5  # How fast spin relaxes toward 0.
@@ -266,8 +257,7 @@ def render(state: PotionPlayState, t: float, count: int | None = None) -> list[R
         # magnitude has piled up. Normalized to BASE_PEAK_BRIGHTNESS rather
         # than all the way to 255: a pop brightens by scaling this base up
         # further (see below), and if the base were already at 255 there'd
-        # be no headroom left for that to show at all -- a real pixel hit
-        # this exact wall once fully sprinkled, making pops invisible.
+        # be no headroom left for that to show at all.
         # tint_strength (how much the shimmer fades out in favor of that
         # saturated color) grows smoothly from that same magnitude instead,
         # via an asymptotic curve that approaches but never quite reaches
