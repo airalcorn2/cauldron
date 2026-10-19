@@ -54,7 +54,7 @@ The talons (`button_4`/`button_5`) brake the swirl and steer its direction; boil
 See `brew_game.py` for the full rules; run it directly to play a round without going through mode selection.
 
 **play** is also a one-shot detour, not a persistent mode — but it's a sandbox, not a game: no winning, losing, or timing out, just manipulating the potion for fun.
-Face buttons sprinkle that color into the potion, accumulating permanently; D-pad left floods the whole ring with a rainbow, and D-pad right sends a comet sweeping once around, clearing colors as it passes.
+Face buttons sprinkle that color into the potion, accumulating permanently; D-pad left resets the whole ring into a true rainbow gradient with a swirling fade, and D-pad right sends a comet sweeping once around, clearing colors as it passes.
 The talons give the potion a quick stir that settles back down on its own, and D-pad up/down steps through three heat levels, each with its own bubbling look and volume.
 Every action is interruptible — mashing buttons quickly only narrates the last one, not a backlog of all of them — and announced by a randomly chosen witch each time.
 See `potion_play.py` for the full rules; run it directly without going through mode selection.

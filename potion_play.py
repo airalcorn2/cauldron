@@ -1,15 +1,18 @@
 """Controller mini-mode: sprinkle, stir, and heat a potion -- no game, just lights.
 
 Face buttons sprinkle a colored "ingredient" into the potion, which
-accumulates permanently -- nothing here fades on its own, with two
+accumulates permanently -- nothing here fades on its own, with three
 exceptions: the stir impulse (talons), which is explicitly meant to
-settle, and the comet (D-pad right), which clears tint as it sweeps
-around. D-pad left adds a rainbow -- every pixel at once, instead of a
-random subset like a normal sprinkle. D-pad up/down steps the heat
-through three levels (none/medium/vigorous bubbling), each with its own
-bubble-pop rate and bubbling volume -- discrete rather than a continuous
-dial, so each level's look and sound can be tuned and checked on its own.
-Runs until Select+Start is pressed again.
+settle; the comet (D-pad right), which clears tint as it sweeps around;
+and the rainbow (D-pad left), which resets every pixel's tint to a true
+rainbow gradient rather than mixing into whatever's already there,
+fading into it over a second or so with a strong spin impulse layered on
+for a swirling, magical transition rather than an instant snap. D-pad
+up/down steps the heat through three levels (none/medium/vigorous
+bubbling), each with its own bubble-pop rate and bubbling volume --
+discrete rather than a continuous dial, so each level's look and sound
+can be tuned and checked on its own. Runs until Select+Start is pressed
+again.
 
 The ambient bubbling sound plays continuously, including right through
 ingredient/heat/stir/rainbow/comet callouts -- unlike the rest of the show, which always
@@ -88,7 +91,9 @@ POP_LIFETIME_SEC = 0.4
 POP_BOOST = 180.0
 POP_RADIUS = 3  # Neighboring pixels catch some of a pop's boost too, falling off with distance -- a single lit pixel among 144 barely reads as a "pop" otherwise.
 
-RAINBOW_MAGNITUDE = 300.0  # Per-pixel tint magnitude added by a rainbow, well past TINT_SATURATION_SCALE so it reads at full color immediately.
+RAINBOW_MAGNITUDE = 300.0  # Per-pixel tint magnitude the rainbow fades toward, well past TINT_SATURATION_SCALE so it reads at full color immediately.
+RAINBOW_FADE_SEC = 1.5  # How long the fade into the rainbow takes.
+RAINBOW_SPIN_IMPULSE = 4.0  # Spin impulse on trigger, for a swirling transition -- stronger than a talon's STIR_IMPULSE, since this is meant to read as a bigger, more dramatic flourish.
 COMET_LOOP_SEC = 2.0  # Time for the comet to sweep once around the whole ring.
 COMET_TRAIL_LENGTH = 12  # Pixels behind the comet's leading edge that still glow, fading out.
 COMET_BOOST = 220.0  # Brightness boost at the comet's leading edge.
@@ -124,14 +129,28 @@ class _Comet:
 
 
 @dataclass
+class _RainbowFade:
+    """An in-progress reset of every pixel's tint toward the fixed
+    rainbow gradient (_RAINBOW_TARGET), overwriting whatever was there
+    instead of mixing into it like every other ingredient. ``start`` is a
+    snapshot of tint taken the moment the fade began (see add_rainbow());
+    ``elapsed`` drives how far each pixel has lerped from it toward the
+    target -- see _advance()."""
+
+    start: list[list[float]]
+    elapsed: float = 0.0
+
+
+@dataclass
 class PotionPlayState:
     """The potion's full, persistent state.
 
     Unlike brew_game.PotionState, this is a plain mutable object rather
     than an immutable snapshot: ``tint`` is a 144-entry buffer that only
     ever grows (sprinkles add to it, nothing subtracts), so rebuilding it
-    fresh every tick would be pure waste. ``pops`` and ``comet`` are the
-    genuinely transient pieces -- short-lived effects, not potion state.
+    fresh every tick would be pure waste. ``pops``, ``comet``, and
+    ``rainbow_fade`` are the genuinely transient pieces -- short-lived
+    effects, not potion state.
     """
 
     tint: list[list[float]] = field(
@@ -142,6 +161,7 @@ class PotionPlayState:
     phase: float = 0.0
     pops: list[_Pop] = field(default_factory=list)
     comet: _Comet | None = None
+    rainbow_fade: _RainbowFade | None = None
 
 
 def sprinkle(state: PotionPlayState, button_rgb: RGB) -> None:
@@ -150,12 +170,12 @@ def sprinkle(state: PotionPlayState, button_rgb: RGB) -> None:
 
     Deliberately unbounded -- unlike an early version, nothing here clamps
     at 255. Channel values only ever grow, by design (nothing fades except
-    the comet, see below), and additive color mixing trends toward white
-    the more colors pile onto a pixel, so clamping each channel
-    independently just washed everything out to white/pale eventually, no
-    matter what was actually sprinkled. render() normalizes by each
-    pixel's own peak channel instead, which keeps the true hue at full
-    saturation forever, regardless of magnitude.
+    the comet and the rainbow fade, see below), and additive color mixing
+    trends toward white the more colors pile onto a pixel, so clamping
+    each channel independently just washed everything out to white/pale
+    eventually, no matter what was actually sprinkled. render() normalizes
+    by each pixel's own peak channel instead, which keeps the true hue at
+    full saturation forever, regardless of magnitude.
     """
     hit_count = max(1, round(_PIXEL_COUNT * SPRINKLE_FRACTION))
     for i in random.sample(range(_PIXEL_COUNT), hit_count):
@@ -165,26 +185,58 @@ def sprinkle(state: PotionPlayState, button_rgb: RGB) -> None:
         pixel[2] += SPRINKLE_INCREMENT * (button_rgb.b / 255)
 
 
-def add_rainbow(state: PotionPlayState) -> None:
-    """Add a full-ring rainbow gradient to every pixel's tint at once,
-    instead of a random subset like a normal sprinkle. Mutates
-    ``state.tint`` in place; unbounded, same as sprinkle()."""
+def _rainbow_target() -> list[list[float]]:
+    """The rainbow's fixed target tint: every pixel's full-saturation hue
+    around the color wheel. Computed once at import time since it never
+    changes -- add_rainbow() fades toward this rather than recomputing it
+    per press."""
+    target = []
     for i in range(_PIXEL_COUNT):
         hue = i / _PIXEL_COUNT
         r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-        pixel = state.tint[i]
-        pixel[0] += RAINBOW_MAGNITUDE * r
-        pixel[1] += RAINBOW_MAGNITUDE * g
-        pixel[2] += RAINBOW_MAGNITUDE * b
+        target.append([RAINBOW_MAGNITUDE * r, RAINBOW_MAGNITUDE * g, RAINBOW_MAGNITUDE * b])
+    return target
+
+
+_RAINBOW_TARGET = _rainbow_target()
+
+
+def add_rainbow(state: PotionPlayState) -> None:
+    """Start fading the potion's tint toward the true rainbow gradient
+    (_RAINBOW_TARGET), with a strong spin impulse layered on for a
+    swirling, magical transition rather than an instant snap -- see
+    _RainbowFade and _advance(). Unlike sprinkle(), this resets rather
+    than mixes in, so the rainbow always reads clean regardless of
+    whatever was sprinkled in before. Safe to call again mid-fade --
+    picks up from the potion's current (possibly still-fading) tint
+    rather than restarting from scratch."""
+    state.rainbow_fade = _RainbowFade(start=[list(pixel) for pixel in state.tint])
+    state.spin += RAINBOW_SPIN_IMPULSE
 
 
 def _advance(state: PotionPlayState, dt: float) -> None:
     """Advance everything that changes over time on its own: spin decay,
-    the bubble-pop lifecycle, and the comet's sweep (if one is active).
-    Mutates ``state`` in place. Heat has no such passive change -- it's a
+    the rainbow fade's progress (if one is active), the bubble-pop
+    lifecycle, and the comet's sweep (if one is active). Mutates
+    ``state`` in place. Heat has no such passive change -- it's a
     discrete level, adjusted directly by up/down taps in run()."""
     state.spin -= state.spin * min(1.0, STIR_DECAY_PER_SEC * dt)
     state.phase = (state.phase + state.spin * dt) % 1.0
+
+    if state.rainbow_fade is not None:
+        fade = state.rainbow_fade
+        fade.elapsed += dt
+        progress = min(1.0, fade.elapsed / RAINBOW_FADE_SEC)
+        eased = progress * progress * (3.0 - 2.0 * progress)  # Smoothstep.
+        for i in range(_PIXEL_COUNT):
+            start = fade.start[i]
+            target = _RAINBOW_TARGET[i]
+            pixel = state.tint[i]
+            pixel[0] = start[0] + (target[0] - start[0]) * eased
+            pixel[1] = start[1] + (target[1] - start[1]) * eased
+            pixel[2] = start[2] + (target[2] - start[2]) * eased
+        if progress >= 1.0:
+            state.rainbow_fade = None
 
     expected_pops = POP_RATES_PER_SEC[state.heat] * dt
     spawn_count = int(expected_pops)
@@ -587,7 +639,7 @@ def main() -> None:
 
     print(
         "Face buttons (blue/red/yellow/green) sprinkle that color in. D-pad "
-        "left adds a rainbow; D-pad right sends a comet around, clearing "
+        "left swirls into a rainbow; D-pad right sends a comet around, clearing "
         "colors as it passes. D-pad up/down steps the heat through 3 "
         "levels. Talons (button_4/button_5) stir. Select+Start to quit."
     )
