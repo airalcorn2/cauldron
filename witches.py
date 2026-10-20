@@ -32,26 +32,29 @@ class Witch(StrEnum):
 class WitchProfile:
     """Everything that distinguishes one witch from another.
 
-    The stability/similarity_boost/style/speed/use_speaker_boost fields are
-    ElevenLabs delivery controls, shared by both voice_id and free_voice_id
-    below (the same delivery, just addressed to a different voice). See
+    The stability/similarity_boost/use_speaker_boost fields are ElevenLabs
+    delivery controls, shared by both voice_id and free_voice_id below (the
+    same delivery, just addressed to a different voice). See
     voice_generator.VoiceSettings, which these become, for what each one does.
     """
 
-    name: str  # Display name, e.g., "Violet".
-    personality: str  # Short phrase folded into the Gemini prompts.
+    # name is the display name, e.g., "Violet". personality is a short
+    # phrase folded into the Gemini prompts.
+    name: str
+    personality: str
     # This witch's LED color, as plain (r, g, b) values rather than
     # light_control.py's RGB type, so this module stays free of any hardware
     # dependency; light_control.py wraps this into its own RGB object.
     color: tuple[int, int, int]
-    voice_id: str  # Premium ElevenLabs voice, used by the live show.
-    free_voice_id: str  # Free-tier voice, used by tests and --once.
+    # voice_id is the premium ElevenLabs voice, used by the live show.
+    # free_voice_id is the free-tier voice, used by tests and --once.
+    voice_id: str
+    free_voice_id: str
     # ElevenLabs delivery controls, plain rather than a voice_generator.
     # VoiceSettings object so this module stays free of any ElevenLabs API
     # dependency; voice_generator.py wraps these into its own VoiceSettings.
     stability: float
     similarity_boost: float
-    style: float
     # Hand-written mode-select dialogue (see cauldron_controller.py's
     # _run_mode_selection()): one line asking the mortal to pick a mode,
     # one line per mode naming that mode's button (keyed by mode name --
@@ -82,7 +85,6 @@ class WitchProfile:
     potion_stir: str
     potion_rainbow: str
     potion_comet: str
-    speed: float = 1.0
     use_speaker_boost: bool = True
     # Per-witch playback volume, since some voices render quieter than others
     # at the same ElevenLabs settings. Not capped at 1.0 -- audio.py applies
@@ -109,7 +111,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         free_voice_id="XrExE9yKIg1WjnnlVkGX",
         stability=0.5,
         similarity_boost=0.75,
-        style=0.35,
         mode_select_intro=(
             "Ahh, a mortal seeks to alter the ritual! Behold the eight runes "
             "upon your magic tablet."
@@ -170,7 +171,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Ahh, give it a stir!",
         potion_rainbow="Ahh, a rainbow of colors!",
         potion_comet="Ahh, a comet streaks through, wiping the slate clean!",
-        speed=0.95,
         volume=0.65,
     ),
     Witch.AMBER: WitchProfile(
@@ -181,7 +181,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         free_voice_id="EXAVITQu4vr4xnSDxMaL",
         stability=0.45,
         similarity_boost=0.75,
-        style=0.45,
         mode_select_intro=(
             "Ooh, somebody wants options! Check it, your tablet's got eight runes."
         ),
@@ -241,7 +240,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Ooh, stir it up!",
         potion_rainbow="Ooh, a whole rainbow!",
         potion_comet="Ooh, a comet! Watch it clean house!",
-        speed=1.0,
         volume=0.65,
     ),
     Witch.HAZEL: WitchProfile(
@@ -252,7 +250,6 @@ WITCHES: dict[Witch, WitchProfile] = {
         free_voice_id="Xb7hH8MSUJpSbSDYk0k2",
         stability=0.5,
         similarity_boost=0.7,
-        style=0.3,
         mode_select_intro=(
             "Hmph. Changing the ritual, are we. Eight choices on that little "
             "tablet of yours."
@@ -313,7 +310,7 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Stirring. Fine.",
         potion_rainbow="A rainbow. Fine, showy.",
         potion_comet="A comet. Hmph, clearing the mess.",
-        speed=0.92,
-        volume=1.5,  # Renders quieter than Violet/Amber at the same settings.
+        # Renders quieter than Violet/Amber at the same settings.
+        volume=1.5,
     ),
 }

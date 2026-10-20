@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -28,13 +29,27 @@ from witches import WITCHES, Witch
 ALSA_DEVICE = "plughw:Headphones,0"
 
 ASSETS_DIR = Path("assets")
-GENERATED_DIR = Path("generated")  # Where voice_generator.py writes <witch>.mp3.
+# Where voice_generator.py writes <witch>.mp3.
+GENERATED_DIR = Path("generated")
 # Bubbling sound effect from Pixabay:
 # https://pixabay.com/sound-effects/household-cauldron-boiling-173607/
 BUBBLE_SFX_PATH = ASSETS_DIR / "bubbling.wav"
 # Witch laughing sound effect from Pixabay:
 # https://pixabay.com/sound-effects/people-witch-laugh-28961/
 LAUGH_SFX_PATH = ASSETS_DIR / "witch-laugh.wav"
+# Water splash sound effect from Pixabay:
+# https://pixabay.com/sound-effects/film-special-effects-water-splash-229315/
+_SPLASH_SOURCE_PATH = ASSETS_DIR / "splash.mp3"
+# Volume-scaled .wav copy of the above, rendered once by setup() (see
+# _ensure_splash_audio()) -- aplay (used for .wav playback, see
+# play_file()) has no live volume flag the way mpg123's -f does, so
+# matching SPLASH_VOLUME means baking it into the file itself. Playing a
+# .wav through aplay instead of the source .mp3 through mpg123 also cuts
+# per-call startup latency a lot on this hardware (benchmarked: ~0.12s vs
+# ~0.4s for a clip this short) -- worth it for a cue meant to land the
+# instant something drops in, unlike a multi-second voice line where the
+# difference wouldn't register.
+SPLASH_SFX_PATH = GENERATED_DIR / "_splash.wav"
 
 # Relative volumes (0.0-1.0) for the two ambience loops. pygame can only scale
 # a Sound down, never up, so the laugh -- measured at roughly 7x bubbling's
@@ -48,6 +63,10 @@ LAUGH_VOLUME: float = 0.3
 # "something's brewing" cue used while actually waiting on an API call, so
 # no laugh plays alongside it either -- see start_bubbling()'s ``laugh``).
 IDLE_BUBBLE_VOLUME: float = 0.55
+# trivia_game.py's (and others') answer/drop-splash cue. Baked into
+# SPLASH_SFX_PATH by _ensure_splash_audio(), not applied at play time --
+# unlike VOICE_VOLUME/WITCH_VOLUMES, which are live mpg123 -f scales.
+SPLASH_VOLUME: float = 0.6
 
 # Default witch-line (TTS) playback volume, used by the CLI test below when
 # no specific witch is given. The live show instead uses WITCH_VOLUMES, so
@@ -62,9 +81,29 @@ _bubble_sfx: pygame.mixer.Sound | None = None
 _laugh_sfx: pygame.mixer.Sound | None = None
 
 
+def _ensure_splash_audio() -> None:
+    """Pre-render SPLASH_SFX_PATH from _SPLASH_SOURCE_PATH at SPLASH_VOLUME,
+    if not already cached. One-time, near-instant -- same technique as
+    potion_play.py's _ensure_bubble_audio()."""
+    if SPLASH_SFX_PATH.exists():
+        return
+    SPLASH_SFX_PATH.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(_SPLASH_SOURCE_PATH),
+            "-filter:a", f"volume={SPLASH_VOLUME}",
+            str(SPLASH_SFX_PATH),
+        ],
+        check=True,
+    )
+
+
 def setup() -> None:
-    """Initialize the pygame mixer. Call once at startup."""
+    """Initialize the pygame mixer and pre-render the splash SFX (see
+    _ensure_splash_audio()). Call once at startup."""
     pygame.mixer.init()
+    _ensure_splash_audio()
 
 
 def _bubble() -> pygame.mixer.Sound:
@@ -120,6 +159,34 @@ def stop_bubbling() -> None:
     _laugh().stop()
 
 
+def start_laugh() -> None:
+    """Loop the witch-laugh effect on its own, layered over whatever else
+    is already playing.
+
+    start_bubbling(laugh=True) plays bubbling and the laugh together as one
+    pygame-mixer-based pair -- no good for trivia_game.py, whose own
+    ambience loop runs as an independent aplay subprocess (see
+    start_bubbling_background()) specifically so voice lines can play
+    right over it. This is just the laugh half, for a caller that wants
+    react mode's "something's happening" cue (bubbling+laugh+flicker, see
+    cauldron_controller._start_ambience()) without also restarting
+    bubbling. No-op if the mixer is currently quit (play_file() releases
+    it around every voice line) or the laugh is already looping.
+    """
+    if pygame.mixer.get_init() is None:
+        return
+    sfx = _laugh()
+    if sfx.get_num_channels() == 0:
+        sfx.play(loops=-1)
+
+
+def stop_laugh() -> None:
+    """Stop the laugh loop. Safe to call any time."""
+    if pygame.mixer.get_init() is None:
+        return
+    _laugh().stop()
+
+
 def set_ambience_intensity(level: float) -> None:
     """Scale the already-playing bubbling/laugh loop's volume by ``level`` (0-1).
 
@@ -136,6 +203,90 @@ def set_ambience_intensity(level: float) -> None:
     level = max(0.0, min(1.0, level))
     _bubble().set_volume(BUBBLE_VOLUME * (0.3 + 0.7 * level))
     _laugh().set_volume(LAUGH_VOLUME * (0.2 + 0.8 * level))
+
+
+def _bg_bubble_path(volume: float) -> Path:
+    return GENERATED_DIR / f"_bubbling_bg_{volume:.2f}.wav"
+
+
+def _ensure_bg_bubble_audio(volume: float) -> Path:
+    """Pre-render one volume-scaled copy of the bubbling SFX via ffmpeg, if
+    not already cached -- aplay (used by start_bubbling_background() below)
+    has no live volume control, unlike mpg123's -f flag used elsewhere (see
+    play_file()), so matching a given volume means pre-scaling the file
+    itself instead. Same technique as potion_play.py's
+    _ensure_bubble_audio(), just one fixed level rather than several."""
+    path = _bg_bubble_path(volume)
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-i",
+                str(BUBBLE_SFX_PATH),
+                "-filter:a",
+                f"volume={volume}",
+                str(path),
+            ],
+            check=True,
+        )
+    return path
+
+
+_bg_bubble_thread: threading.Thread | None = None
+_bg_bubble_stop: threading.Event | None = None
+
+
+def start_bubbling_background(volume: float = IDLE_BUBBLE_VOLUME) -> None:
+    """Loop the bubbling SFX as its own aplay subprocess, independent of
+    pygame.mixer entirely -- unlike start_bubbling() above, play_file()
+    never needs to stop this before a voice line plays, since two plain
+    subprocesses can share the ALSA device directly without the glitching
+    pygame's mixer causes against a subprocess (confirmed by ear on this
+    hardware; see play_file()'s docstring for why that function exists at
+    all). First used this way by potion_play.py's heat-level-aware version
+    of this same trick; this is the simpler fixed-volume case, for a caller
+    that just wants ambience playing straight through its voice lines with
+    no live volume changes. Idempotent, same as start_bubbling().
+    """
+    global _bg_bubble_thread, _bg_bubble_stop
+    if _bg_bubble_thread is not None:
+        return
+    path = _ensure_bg_bubble_audio(volume)
+    stop = threading.Event()
+    _bg_bubble_stop = stop
+
+    def _run() -> None:
+        process: subprocess.Popen[bytes] | None = None
+        while not stop.is_set():
+            if (process is None) or (process.poll() is not None):
+                process = subprocess.Popen(
+                    ["aplay", "-D", ALSA_DEVICE, "-q", str(path)]
+                )
+            time.sleep(0.1)
+        if process is not None:
+            process.terminate()
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                process.kill()
+
+    _bg_bubble_thread = threading.Thread(target=_run, daemon=True)
+    _bg_bubble_thread.start()
+
+
+def stop_bubbling_background() -> None:
+    """Stop the subprocess-based bubbling loop. Safe to call any time."""
+    global _bg_bubble_thread, _bg_bubble_stop
+    if _bg_bubble_thread is None:
+        return
+    assert _bg_bubble_stop is not None  # Set together with _bg_bubble_thread.
+    _bg_bubble_stop.set()
+    _bg_bubble_thread.join(timeout=2)
+    _bg_bubble_thread = _bg_bubble_stop = None
 
 
 _INTERRUPT_POLL_SEC = 0.02

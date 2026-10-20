@@ -21,11 +21,14 @@ import time
 
 import RPi.GPIO as GPIO
 
-EXTEND_PIN = 16  # GPIO 16 (physical pin 36).
-RETRACT_PIN = 26  # GPIO 26 (physical pin 37).
+# GPIO 16 (physical pin 36) and GPIO 26 (physical pin 37).
+EXTEND_PIN = 16
+RETRACT_PIN = 26
 
-STROKE_SEC = 4.0  # Time for one full extend or retract stroke.
-DWELL_SEC = 2.0  # Hold at full extension so items fully clear before retracting.
+# Time for one full extend or retract stroke.
+STROKE_SEC = 4.0
+# Hold at full extension so items fully clear before retracting.
+DWELL_SEC = 2.0
 
 
 def setup() -> None:

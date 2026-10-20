@@ -119,7 +119,8 @@ SETTLE_GAP_SEC = 2.0
 
 # Request-mode tuning.
 INGREDIENT_COUNT = 2
-HOLD_TO_REPEAT_SEC = 1.2  # Obstruct the beam this long to replay the request.
+# Obstruct the beam this long to replay the request.
+HOLD_TO_REPEAT_SEC = 1.2
 
 # Live mode switching via a USB gamepad (see controller.py). The mortal holds
 # Select+Start together to open mode selection; a random witch then asks
@@ -149,15 +150,16 @@ MODE_BUTTONS: dict[str, str] = {
 # `.venv/bin/python controller.py` and pressing each one. button_4/button_5
 # (the talons) and "up"/"down" (the D-pad, physically unlit) are just
 # assigned colors here, distinct from the face buttons' and each other's.
+# In key order: blue, red, yellow, green, cyan, orange, magenta, white.
 BUTTON_COLORS: dict[str, light_control.RGB] = {
-    "button_0": light_control.RGB(30, 90, 255),  # Blue
-    "button_1": light_control.RGB(220, 20, 20),  # Red
-    "button_2": light_control.RGB(230, 200, 0),  # Yellow
-    "button_3": light_control.RGB(60, 200, 40),  # Green
-    "button_4": light_control.RGB(0, 220, 220),  # Cyan
-    "button_5": light_control.RGB(255, 130, 0),  # Orange
-    "up": light_control.RGB(200, 0, 160),  # Magenta
-    "down": light_control.RGB(255, 255, 255),  # White
+    "button_0": light_control.RGB(30, 90, 255),
+    "button_1": light_control.RGB(220, 20, 20),
+    "button_2": light_control.RGB(230, 200, 0),
+    "button_3": light_control.RGB(60, 200, 40),
+    "button_4": light_control.RGB(0, 220, 220),
+    "button_5": light_control.RGB(255, 130, 0),
+    "up": light_control.RGB(200, 0, 160),
+    "down": light_control.RGB(255, 255, 255),
 }
 
 # Mode -> ring color, derived from BUTTON_COLORS. Shown steady while that
@@ -442,10 +444,10 @@ def _run_mode_selection() -> None:
         else:
             process_potion_play()
         _pending_mode = previous_mode
-        _start_idle()  # Back to idle.
+        _start_idle()
         return
 
-    _start_idle()  # Back to idle.
+    _start_idle()
     print(f"Controller: switched to {selected} mode.")
 
 
@@ -459,7 +461,8 @@ def _watch_controller() -> None:
     """
     combo_was_held = False
     while True:
-        controller.poll_pressed()  # Drain the event queue; is_held() needs it pumped.
+        # Drain the event queue; is_held() needs it pumped.
+        controller.poll_pressed()
         is_held = controller.is_held(_SELECT_BUTTON) and controller.is_held(
             _START_BUTTON
         )
@@ -586,7 +589,18 @@ def process_spooky_spell(
     raised instead, so a broken camera, API, or speaker is reported loudly.
     """
     print("Object detected. Starting the cauldron sequence.")
-    _start_ambience()
+    # Flicker first, immediately -- _stop_idle() (just called by the main
+    # loop before this) already blanked the ring, so if the splash below
+    # played before any light effect started, the ring would sit dark for
+    # its whole (blocking) duration. Bubbling+laugh start only after the
+    # splash finishes, not alongside it: play_file() fully quits
+    # pygame.mixer for the splash's duration anyway (see its docstring),
+    # and a Sound started before that wouldn't survive the quit/reinit to
+    # resume on its own afterward.
+    light_control.start_flicker()
+    # Volume is baked into the .wav; see audio._ensure_splash_audio().
+    audio.play_file(audio.SPLASH_SFX_PATH)
+    audio.start_bubbling()
 
     try:
         ir_sensor.wait_for_quiet(SETTLE_GAP_SEC, abort=_mode_switch_abort)
@@ -644,11 +658,24 @@ def _wait_for_drop_then_capture(
     def on_repeat() -> None:
         recite_spell(spell_paths)
 
+    def on_drop() -> None:
+        # on_obstruct just stopped ambience, including flicker -- restart
+        # that immediately so the ring doesn't sit dark through the
+        # splash's (blocking) duration, same reasoning as
+        # process_spooky_spell(). Bubbling+laugh wait until after the
+        # splash finishes, since play_file() quits pygame.mixer for the
+        # splash's duration anyway and a Sound started before that
+        # wouldn't survive to resume on its own.
+        light_control.start_flicker()
+        # Volume is baked into the .wav; see audio._ensure_splash_audio().
+        audio.play_file(audio.SPLASH_SFX_PATH)
+        audio.start_bubbling()
+
     ir_sensor.wait_for_drops(
         SETTLE_GAP_SEC,
         hold=HOLD_TO_REPEAT_SEC,
         on_obstruct=_stop_ambience,
-        on_drop=_start_ambience,
+        on_drop=on_drop,
         on_repeat=on_repeat,
         abort=_mode_switch_abort,
     )
@@ -743,14 +770,17 @@ def process_requested_spell(
             label="Voicing the request.",
         )
         if spell_paths is None:
-            return  # TTS fell back; end the round.
+            # TTS fell back; end the round.
+            return
 
         result = _evaluate_attempt(recipe, spell_paths, strict=strict)
-        if result is None:  # Camera/model failed, or a mode switch interrupted it.
+        # None means the camera/model failed, or a mode switch interrupted it.
+        if result is None:
             if _mode_switch_abort.is_set():
                 print("Round interrupted by mode switch.\n")
                 return
-            _stop_ambience()  # Clear the ring for the cue.
+            # Clear the ring for the cue.
+            _stop_ambience()
             light_control.fizzle()
             print("Round complete: evaluation failed.\n")
             return
@@ -810,14 +840,17 @@ def process_category_challenge(*, strict: bool, paid_voices: bool = False) -> No
             label="Voicing the challenge.",
         )
         if spell_paths is None:
-            return  # TTS fell back; end the round.
+            # TTS fell back; end the round.
+            return
 
         result = _evaluate_category_attempt(challenge, spell_paths, strict=strict)
-        if result is None:  # Camera/model failed, or a mode switch interrupted it.
+        # None means the camera/model failed, or a mode switch interrupted it.
+        if result is None:
             if _mode_switch_abort.is_set():
                 print("Round interrupted by mode switch.\n")
                 return
-            _stop_ambience()  # Clear the ring for the cue.
+            # Clear the ring for the cue.
+            _stop_ambience()
             light_control.fizzle()
             print("Round complete: evaluation failed.\n")
             return
@@ -966,7 +999,8 @@ def main(
         pass
 
     finally:
-        wait_for_stage_dump()  # Don't cut power to the motor mid-stroke.
+        # Don't cut power to the motor mid-stroke.
+        wait_for_stage_dump()
         _stop_idle()
         # Unconditional, not just a consequence of stop_rainbow(): if
         # shutdown lands mid mode-select (a daemon thread painting solid

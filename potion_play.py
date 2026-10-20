@@ -51,7 +51,8 @@ from light_control import RGB
 from voice_generator import VOICES, VoiceProfile, generate_to_path
 from witches import WITCHES, Witch
 
-TICK_SEC = 0.05  # 20Hz.
+# 20Hz.
+TICK_SEC = 0.05
 
 CACHE_DIR = Path("generated/potion_play")
 
@@ -69,9 +70,10 @@ _RIGHT_TALON = 5
 
 INGREDIENTS_PER_COLOR = 6
 
-# Tuning, found by feel.
-SPRINKLE_FRACTION = 0.4  # Fraction of pixels hit per sprinkle.
-SPRINKLE_INCREMENT = 150.0  # Per-channel add per sprinkle.
+# Tuning, found by feel. SPRINKLE_FRACTION is the fraction of pixels hit
+# per sprinkle, SPRINKLE_INCREMENT the per-channel add per sprinkle.
+SPRINKLE_FRACTION = 0.4
+SPRINKLE_INCREMENT = 150.0
 # Raw tint magnitude (a pixel's peak channel) at which the white shimmer is
 # about 2/3 replaced by the sprinkled color -- see render().
 TINT_SATURATION_SCALE = 100.0
@@ -79,24 +81,39 @@ TINT_SATURATION_SCALE = 100.0
 # render(). Reserves (255 - this) of real brightness headroom so a pop has
 # somewhere to visibly go even on an already fully-colored pixel.
 BASE_PEAK_BRIGHTNESS = 130.0
-STIR_IMPULSE = 1.5  # Added to spin per talon tap.
-STIR_DECAY_PER_SEC = 1.5  # How fast spin relaxes toward 0.
+# STIR_IMPULSE is added to spin per talon tap; STIR_DECAY_PER_SEC is how
+# fast spin relaxes toward 0.
+STIR_IMPULSE = 1.5
+STIR_DECAY_PER_SEC = 1.5
 # Heat is three discrete, named levels (up/down tap through them, same as
 # rainbow/comet's left/right) rather than a continuous dial -- easier to
 # debug "does it look right at each level" than tuning one continuous rate.
 HEAT_LEVELS = 3
-DEFAULT_HEAT = 0  # No bubbling until the mortal asks for it.
-POP_RATES_PER_SEC = (0.0, 30.0, 85.0)  # Expected pops/sec across the ring, per level.
+# No bubbling until the mortal asks for it.
+DEFAULT_HEAT = 0
+# Expected pops/sec across the ring, per level.
+POP_RATES_PER_SEC = (0.0, 30.0, 85.0)
 POP_LIFETIME_SEC = 0.4
 POP_BOOST = 180.0
-POP_RADIUS = 3  # Neighboring pixels catch some of a pop's boost too, falling off with distance -- a single lit pixel among 144 barely reads as a "pop" otherwise.
+# Neighboring pixels catch some of a pop's boost too, falling off with
+# distance -- a single lit pixel among 144 barely reads as a "pop" otherwise.
+POP_RADIUS = 3
 
-RAINBOW_MAGNITUDE = 300.0  # Per-pixel tint magnitude the rainbow fades toward, well past TINT_SATURATION_SCALE so it reads at full color immediately.
-RAINBOW_FADE_SEC = 1.5  # How long the fade into the rainbow takes.
-RAINBOW_SPIN_IMPULSE = 4.0  # Spin impulse on trigger, for a swirling transition -- stronger than a talon's STIR_IMPULSE, since this is meant to read as a bigger, more dramatic flourish.
-COMET_LOOP_SEC = 2.0  # Time for the comet to sweep once around the whole ring.
-COMET_TRAIL_LENGTH = 12  # Pixels behind the comet's leading edge that still glow, fading out.
-COMET_BOOST = 220.0  # Brightness boost at the comet's leading edge.
+# Per-pixel tint magnitude the rainbow fades toward, well past
+# TINT_SATURATION_SCALE so it reads at full color immediately.
+RAINBOW_MAGNITUDE = 300.0
+# How long the fade into the rainbow takes.
+RAINBOW_FADE_SEC = 1.5
+# Spin impulse on trigger, for a swirling transition -- stronger than a
+# talon's STIR_IMPULSE, since this is meant to read as a bigger, more
+# dramatic flourish.
+RAINBOW_SPIN_IMPULSE = 4.0
+# Time for the comet to sweep once around the whole ring.
+COMET_LOOP_SEC = 2.0
+# Pixels behind the comet's leading edge that still glow, fading out.
+COMET_TRAIL_LENGTH = 12
+# Brightness boost at the comet's leading edge.
+COMET_BOOST = 220.0
 
 _PIXEL_COUNT = light_control.STRIP_CONFIG.count
 
@@ -227,7 +244,8 @@ def _advance(state: PotionPlayState, dt: float) -> None:
         fade = state.rainbow_fade
         fade.elapsed += dt
         progress = min(1.0, fade.elapsed / RAINBOW_FADE_SEC)
-        eased = progress * progress * (3.0 - 2.0 * progress)  # Smoothstep.
+        # Smoothstep.
+        eased = progress * progress * (3.0 - 2.0 * progress)
         for i in range(_PIXEL_COUNT):
             start = fade.start[i]
             target = _RAINBOW_TARGET[i]
@@ -451,8 +469,8 @@ def _start_bubbling_bg(state: PotionPlayState) -> None:
     module's docstring. Idempotent, same as audio.start_bubbling().
 
     The SFX file itself is ~28s long, so checking ``state.heat`` only once
-    per playthrough (the first version of this) could take up to 28s to
-    make a volume change audible. Checking every 0.1s instead and
+    per loop of the file could take up to 28s to make a volume change
+    audible. Checking every 0.1s instead and
     restarting aplay immediately on any change makes it near-instant;
     aplay can't change the volume of audio it's already playing, so a
     changed level always means killing the current process and starting
@@ -575,7 +593,8 @@ def run(*, select_button: int = 8, start_button: int = 9) -> None:
     try:
         while True:
             if pending is None:
-                pending = controller.poll_pressed()  # Also keeps is_held() current.
+                # Also keeps is_held() current.
+                pending = controller.poll_pressed()
             if controller.is_held(select_button) and controller.is_held(start_button):
                 return
 
@@ -591,6 +610,16 @@ def run(*, select_button: int = 8, start_button: int = 9) -> None:
                     index = int(pressed.removeprefix("button_"))
                     color, button_rgb = _FACE_COLORS[index]
                     sprinkle(state, button_rgb)
+                    # Non-blocking -- this mode already quits pygame.mixer
+                    # for the whole session and runs its own ambience as a
+                    # plain aplay subprocess (see the module docstring), so
+                    # a splash subprocess overlapping the witch's voice
+                    # line (below) is exactly the kind of concurrent
+                    # playback this design already relies on, not a new
+                    # risk.
+                    # Volume is baked into the .wav itself, not passed
+                    # here -- see audio._ensure_splash_audio().
+                    audio.play_file(audio.SPLASH_SFX_PATH, blocking=False)
                     key = f"{color}_{random.randrange(INGREDIENTS_PER_COLOR)}"
                     voice_path = _ingredient_path(witch, key)
                 elif pressed == f"button_{_LEFT_TALON}":
@@ -603,7 +632,8 @@ def run(*, select_button: int = 8, start_button: int = 9) -> None:
                     add_rainbow(state)
                     voice_path = _rainbow_path(witch)
                 elif pressed == "right":
-                    state.comet = _Comet()  # Restarts from the top if one's already active.
+                    # Restarts from the top if one's already active.
+                    state.comet = _Comet()
                     voice_path = _comet_path(witch)
                 elif pressed == "up":
                     state.heat = min(HEAT_LEVELS - 1, state.heat + 1)

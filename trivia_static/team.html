@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cauldron of Knowledge</title>
+<style>
+  :root {
+    --team1: #ff6400;
+    --team2: #961edc;
+    --bg: #15101d;
+    --panel: #241a33;
+    --text: #f1eaff;
+    --muted: #a898c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.2rem;
+  }
+  h1 { font-size: 1.3rem; letter-spacing: 0.04em; text-transform: uppercase; }
+  .panel {
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 1.2rem;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 1rem;
+    box-shadow: 0 0 24px rgba(0,0,0,0.4);
+  }
+  .team-banner {
+    text-align: center;
+    font-weight: 700;
+    font-size: 1.2rem;
+    padding: 0.6rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+  }
+  .team-banner.team1 { background: rgba(255,100,0,0.18); border: 2px solid var(--team1); }
+  .team-banner.team2 { background: rgba(150,30,220,0.18); border: 2px solid var(--team2); }
+  .scoreboard { display: flex; gap: 0.8rem; }
+  .score {
+    flex: 1;
+    text-align: center;
+    border-radius: 10px;
+    padding: 0.8rem;
+    font-weight: 700;
+  }
+  .score.team1 { background: rgba(255,100,0,0.18); border: 2px solid var(--team1); }
+  .score.team2 { background: rgba(150,30,220,0.18); border: 2px solid var(--team2); }
+  .score .n { font-size: 2.2rem; display: block; }
+  #status { color: var(--muted); margin-top: 1rem; min-height: 1.4em; }
+  #category { font-size: 0.85rem; letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
+  #clue { font-size: 1.15rem; margin: 0.4rem 0 1rem; }
+  textarea {
+    width: 100%;
+    min-height: 3.2rem;
+    border-radius: 8px;
+    border: 1px solid var(--muted);
+    background: #0f0a16;
+    color: var(--text);
+    font-size: 1rem;
+    padding: 0.6rem;
+  }
+  #submit {
+    width: 100%;
+    margin-top: 0.6rem;
+    padding: 0.9rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    background: #7a4dff;
+    color: white;
+  }
+  #submit:disabled { background: #3a3350; color: var(--muted); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<h1>🎃 The Cauldron of Knowledge&nbsp;🎃</h1>
+
+<div class="panel" id="error-panel" hidden>
+  <p>This link doesn't say which team you're on.</p>
+  <p>Scan your team's QR code from the TV screen to join.</p>
+</div>
+
+<div class="panel" id="game-panel" hidden>
+  <div class="team-banner" id="team-banner"></div>
+  <div class="scoreboard">
+    <div class="score team1"><span class="n" id="score1">0</span><span id="score1-name">Team 1</span></div>
+    <div class="score team2"><span class="n" id="score2">0</span><span id="score2-name">Team 2</span></div>
+  </div>
+  <div id="status">Connecting...</div>
+  <div id="prompt" hidden>
+    <div id="category"></div>
+    <div id="clue"></div>
+    <textarea id="answer" placeholder="Just the answer -- no need to phrase it as a question."></textarea>
+    <button id="submit">Submit Answer</button>
+  </div>
+</div>
+
+<script>
+const match = location.pathname.match(/^\/team\/([12])\/?$/);
+const myTeam = match ? parseInt(match[1], 10) : null;
+
+const errorPanel = document.getElementById("error-panel");
+const gamePanel = document.getElementById("game-panel");
+const statusEl = document.getElementById("status");
+const promptEl = document.getElementById("prompt");
+const categoryEl = document.getElementById("category");
+const clueEl = document.getElementById("clue");
+const answerEl = document.getElementById("answer");
+const submitEl = document.getElementById("submit");
+const teamBannerEl = document.getElementById("team-banner");
+
+if (!myTeam) {
+  errorPanel.hidden = false;
+} else {
+  gamePanel.hidden = false;
+  teamBannerEl.classList.add(`team${myTeam}`);
+
+  let teamNames = { "1": "Team 1", "2": "Team 2" };
+  fetch("/teams").then(r => r.json()).then(data => {
+    document.title = data.title;
+    teamNames = data.teams;
+    teamBannerEl.textContent = `You're on: ${teamNames[myTeam]}`;
+    document.getElementById("score1-name").textContent = teamNames["1"];
+    document.getElementById("score2-name").textContent = teamNames["2"];
+  });
+
+  const ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen = () => { statusEl.textContent = "Waiting for the next question..."; };
+  ws.onclose = () => { statusEl.textContent = "Disconnected -- reload to reconnect."; };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "state") {
+      document.getElementById("score1").textContent = data.scores["1"];
+      document.getElementById("score2").textContent = data.scores["2"];
+    } else if (data.type === "prompt") {
+      promptEl.hidden = false;
+      categoryEl.textContent = data.category;
+      clueEl.textContent = data.clue;
+      answerEl.value = "";
+      const myTurn = data.team === myTeam;
+      answerEl.disabled = !myTurn;
+      submitEl.disabled = !myTurn;
+      const steal = data.phase === "steal";
+      statusEl.textContent = myTurn
+        ? (steal ? "🔮 Steal chance -- answer below!" : "Your team's turn -- answer below!")
+        : (steal ? `${teamNames[data.team]} is trying to steal...` : `${teamNames[data.team]} is answering...`);
+    } else if (data.type === "ack") {
+      if (data.accepted) {
+        statusEl.textContent = "Answer submitted! Waiting on the witches...";
+        answerEl.disabled = true;
+        submitEl.disabled = true;
+      } else {
+        statusEl.textContent = "A teammate already answered for this one.";
+      }
+    } else if (data.type === "result") {
+      answerEl.disabled = true;
+      submitEl.disabled = true;
+      statusEl.textContent = `${data.correct ? "✓" : "✗"} ${data.banter}`;
+    } else if (data.type === "end") {
+      promptEl.hidden = true;
+      statusEl.textContent = `Game over! ${teamNames[data.winner]} wins!`;
+    }
+  };
+
+  submitEl.onclick = () => {
+    const text = answerEl.value.trim();
+    if (!text) return;
+    ws.send(JSON.stringify({ type: "answer", team: myTeam, text }));
+  };
+}
+</script>
+
+</body>
+</html>

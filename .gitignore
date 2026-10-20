@@ -3,4 +3,6 @@ __pycache__
 test.jpg
 test_voice.mp3
 generated/
+trivia/
 .env
+CLAUDE.md

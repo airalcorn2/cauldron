@@ -47,9 +47,11 @@ class RGB:
 
 
 BLACK = RGB(0, 0, 0)
-GREEN = RGB(60, 200, 40)  # Success shimmer.
-RED = RGB(220, 20, 20)  # Failure fade.
-GOLD = RGB(255, 190, 30)  # victory_swirl()'s comet color.
+# GREEN is the success shimmer, RED the failure fade, GOLD victory_swirl()'s
+# comet color.
+GREEN = RGB(60, 200, 40)
+RED = RGB(220, 20, 20)
+GOLD = RGB(255, 190, 30)
 SPARKLE = RGB(255, 255, 255)
 
 
@@ -58,9 +60,11 @@ class StripConfig:
     """Wiring and timing parameters for the LED strip."""
 
     count: int = 144
-    pin: int = 10  # GPIO 10 / SPI0 MOSI (physical pin 19). SPI mode needs no root.
+    # GPIO 10 / SPI0 MOSI (physical pin 19). SPI mode needs no root.
+    pin: int = 10
     freq_hz: int = 800_000
-    dma: int = 10  # Ignored in SPI mode; kept for the PixelStrip signature.
+    # Ignored in SPI mode; kept for the PixelStrip signature.
+    dma: int = 10
     brightness: int = 20
     invert: bool = False
     channel: int = 0
@@ -93,8 +97,26 @@ _flicker_thread: threading.Thread | None = None
 _flicker_stop: threading.Event | None = None
 _rainbow_thread: threading.Thread | None = None
 _rainbow_stop: threading.Event | None = None
+# Transient brightness pops laid over whatever start_rainbow()'s own loop
+# is painting -- see trigger_splash(). (pixel, spawn_time, lifetime)
+# tuples; only the rainbow thread ever reads/prunes this, and
+# trigger_splash() only ever appends to it, so there's nothing for the two
+# threads to corrupt by racing on it.
+_splash_pops: list[tuple[int, float, float]] = []
+# Pops spawned per trigger_splash() call.
+_SPLASH_POP_COUNT = 26
+# Neighboring pixels catch some of a pop's boost too, falling off with
+# distance -- same reasoning as potion_play.py's POP_RADIUS: a single lit
+# pixel among 144 barely reads as anything.
+_SPLASH_POP_RADIUS = 3
+# How fast a pop's white-blend ramps up with distance/age -- tuned by feel.
+_SPLASH_POP_BOOST = 500.0
+# Rainbow brightness, below full value -- not required for the white-blend
+# pop effect to show up (see start_rainbow()'s render loop), but widens the
+# contrast between the rainbow's own hues and a pop's white peak.
+_RAINBOW_VALUE = 0.7
 # Whatever set_leds()/set_pixels() last painted, so fade_to_black() can fade
-# out of it -- e.g. brew_game.py's live render, left on the ring after a
+# out of it -- e.g., brew_game.py's live render, left on the ring after a
 # round ends (see run()) -- without needing to read pixel state back from
 # the strip itself.
 _last_colors: list[RGB] = []
@@ -114,7 +136,8 @@ def set_leds(color: RGB) -> None:
     """Fill the ring with a single color."""
     global _last_colors
     if _strip is None:
-        return  # setup() has not run yet.
+        # setup() has not run yet.
+        return
     packed = color.packed()
     for i in range(_strip.numPixels()):
         _strip.setPixelColor(i, packed)
@@ -132,7 +155,8 @@ def set_pixels(colors: Sequence[RGB]) -> None:
     """
     global _last_colors
     if _strip is None:
-        return  # setup() has not run yet.
+        # setup() has not run yet.
+        return
     for i, color in enumerate(colors):
         _strip.setPixelColor(i, color.packed())
     _strip.show()
@@ -152,10 +176,11 @@ def leds_off() -> None:
     set_leds(BLACK)
 
 
-def celebrate(cycles: int = 6, interval: float = 0.12) -> None:
-    """Quick green shimmer for a successful spell."""
+def celebrate(color: RGB = GREEN, cycles: int = 6, interval: float = 0.12) -> None:
+    """Quick colored shimmer for a success -- green by default, for a
+    successful spell; trivia_game.py passes a team's own color instead."""
     for i in range(cycles):
-        set_leds(GREEN if i % 2 == 0 else BLACK)
+        set_leds(color if i % 2 == 0 else BLACK)
         time.sleep(interval)
     leds_off()
 
@@ -188,14 +213,15 @@ def fade_to_black(steps: int = 20, interval: float = 0.05) -> None:
     leds_off()
 
 
-def victory_swirl(loops: int = 3, trail_length: int = 18) -> None:
+def victory_swirl(color: RGB = GOLD, loops: int = 3, trail_length: int = 18) -> None:
     """A one-shot magical flourish for an outright win.
 
-    Deliberately distinct from every other effect in this file: a gold
-    comet sweeps the ring with a fading trail and scattered white
+    Deliberately distinct from every other effect in this file: a comet
+    (gold by default; trivia_game.py passes the winning team's color
+    instead) sweeps the ring with a fading trail and scattered white
     sparkle flecks, accelerating lap over lap, then the whole ring
-    flashes gold-white before fading out -- unlike celebrate()'s flat
-    green blink (used for request/category's photo-judged wins),
+    flashes color-white before fading out -- unlike celebrate()'s flat
+    color blink (used for request/category's photo-judged wins),
     fizzle()'s flat color fade, start_rainbow()'s steady full-spectrum
     chase, or potion_play.py's comet (a single sweep that clears color
     rather than adding a trail). Reserved for brew_game.py's victory
@@ -205,11 +231,12 @@ def victory_swirl(loops: int = 3, trail_length: int = 18) -> None:
         return
     count = _strip.numPixels()
     for lap in range(loops):
-        interval = 0.03 / (lap + 1)  # Each lap faster than the last.
+        # Each lap faster than the last.
+        interval = 0.03 / (lap + 1)
         for i in range(count):
             colors = [BLACK] * count
             for t in range(trail_length):
-                colors[(i - t) % count] = GOLD.scaled(1.0 - t / trail_length)
+                colors[(i - t) % count] = color.scaled(1.0 - t / trail_length)
             for _ in range(2):
                 if random.random() < 0.25:
                     colors[random.randrange(count)] = SPARKLE
@@ -218,7 +245,7 @@ def victory_swirl(loops: int = 3, trail_length: int = 18) -> None:
     for _ in range(3):
         set_leds(SPARKLE)
         time.sleep(0.08)
-        set_leds(GOLD)
+        set_leds(color)
         time.sleep(0.08)
     fade_to_black()
 
@@ -272,7 +299,8 @@ def start_rainbow(interval: float = 0.03, step: float = 0.015) -> None:
     Used as an opening flourish when mode selection begins (see
     cauldron_controller.py), before the ring settles onto each mode's own
     fixed color. Idempotent -- a second call while already running does
-    nothing.
+    nothing. Also renders trigger_splash()'s brightness pops on top of the
+    rainbow, when any are active -- see that function.
     """
     global _rainbow_thread, _rainbow_stop
     if _rainbow_thread is not None:
@@ -285,12 +313,38 @@ def start_rainbow(interval: float = 0.03, step: float = 0.015) -> None:
         while not stop.is_set():
             if _strip is not None:
                 count = _strip.numPixels()
+                now = time.monotonic()
+                # Prune expired pops and total up each pixel's boost from
+                # whatever's left -- see trigger_splash().
+                _splash_pops[:] = [p for p in _splash_pops if now - p[1] < p[2]]
+                pop_boost = [0.0] * count
+                for pixel, spawn_time, lifetime in _splash_pops:
+                    intensity = _SPLASH_POP_BOOST * (
+                        1.0 - (now - spawn_time) / lifetime
+                    )
+                    for delta in range(-_SPLASH_POP_RADIUS, _SPLASH_POP_RADIUS + 1):
+                        falloff = 1.0 - abs(delta) / (_SPLASH_POP_RADIUS + 1)
+                        pop_boost[(pixel + delta) % count] += intensity * falloff
                 for i in range(count):
                     hue = (offset + i / count) % 1.0
-                    r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
-                    _strip.setPixelColor(
-                        i, Color(round(r * 255), round(g * 255), round(b * 255))
-                    )
+                    r, g, b = colorsys.hsv_to_rgb(hue, 1.0, _RAINBOW_VALUE)
+                    r, g, b = r * 255, g * 255, b * 255
+                    # A pop blends this pixel toward white rather than
+                    # scaling its existing hue up -- scaling only brightens
+                    # channels that are already non-zero, which barely
+                    # registers against an already-saturated rainbow (a
+                    # pure hue has a channel sitting at 0 that scaling
+                    # can't touch). Blending toward white lifts every
+                    # channel, including that one, the same technique
+                    # victory_swirl() uses for its unmistakable SPARKLE
+                    # flecks -- a fresh, centered pop reaches full white at
+                    # its peak, fading back to the rainbow's own hue as it
+                    # ages or as distance from its center grows.
+                    blend = min(1.0, pop_boost[i] / _SPLASH_POP_BOOST)
+                    r = r + (255.0 - r) * blend
+                    g = g + (255.0 - g) * blend
+                    b = b + (255.0 - b) * blend
+                    _strip.setPixelColor(i, Color(round(r), round(g), round(b)))
                 _strip.show()
             offset = (offset + step) % 1.0
             stop.wait(interval)
@@ -309,7 +363,31 @@ def stop_rainbow() -> None:
     _rainbow_stop.set()
     _rainbow_thread.join(timeout=2)
     _rainbow_thread = _rainbow_stop = None
+    _splash_pops.clear()
     leds_off()
+
+
+def trigger_splash() -> None:
+    """Arm a burst of transient brightness pops, composited directly into
+    whatever start_rainbow() is already painting -- for trivia_game.py's
+    answer-submission cue. Non-blocking: just records the pops; the
+    rainbow thread (see start_rainbow()) renders them on its own next tick
+    and prunes them once their lifetime's up.
+
+    An overlay rather than a takeover, so the rainbow never has to stop
+    for it. Each pop gets its own randomized lifetime so they don't all
+    fade in lockstep, reading as an organic bubbling burst rather than one
+    uniform flash. No-op if the rainbow isn't running (nothing to overlay
+    onto, and nothing else ever reads this state).
+    """
+    if _strip is None:
+        return
+    count = _strip.numPixels()
+    now = time.monotonic()
+    _splash_pops.extend(
+        (random.randrange(count), now, random.uniform(0.35, 0.7))
+        for _ in range(_SPLASH_POP_COUNT)
+    )
 
 
 def led_flicker(duration: float = 2.0, interval: float = 0.08) -> None:
@@ -332,9 +410,7 @@ def _parse_color(values: list[str]) -> RGB:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Exercise the cauldron's LED ring."
-    )
+    parser = argparse.ArgumentParser(description="Exercise the cauldron's LED ring.")
     parser.add_argument(
         "--brightness",
         type=int,

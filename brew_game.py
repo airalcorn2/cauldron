@@ -30,50 +30,71 @@ import audio
 import controller
 import light_control
 
-TICK_SEC = 0.05  # 20Hz.
+# 20Hz.
+TICK_SEC = 0.05
 
 # Physics tuning, found by feel. Either control can end the round on its
 # own within a similar ~10-20s neglect window, so both need real attention,
 # while attentive play comfortably makes the 30s target.
-DRIFT_PER_SEC = 4.0  # Base drift magnitude at t=0; see DRIFT_RAMP_PER_SEC and PotionState.drift_dir.
-DRIFT_RAMP_PER_SEC = 0.05  # Drift speeds up over the round -- 2.5x by the 30s target -- so a steady rhythm stops being enough.
-HEAT_PER_SEC = 45.0  # heat_up's effect on temp -- crosses the full 0-100 range in a bit over a second, so brief taps (not holds) are what keeps temp near the sweet spot.
-COOL_PER_SEC = 45.0  # cool_down's effect on temp.
-IMBALANCE_TO_RPM = 0.02  # How much straying from 50 speeds up the swirl.
-BRAKE_PER_SEC = 2.5  # Talon braking strength on swirl_rpm.
-STEER_PER_SEC = 1.5  # Talon steering strength on swirl_dir.
-BASELINE_DIR = 0.6  # Magnitude swirl_dir relaxes toward when neither talon is held.
-DIR_RELAX_PER_SEC = 0.4  # How fast swirl_dir relaxes toward its current rest_dir.
-DIR_STALL_THRESHOLD = 0.2  # How close to 0 swirl_dir must be, with no talon held, before rest_dir's sign gets re-rolled -- see PotionState.rest_dir.
-TEMP_STALL_THRESHOLD = 5.0  # Same idea as DIR_STALL_THRESHOLD, for drift_dir when temp coasts near 50.
+# Base drift magnitude at t=0; see DRIFT_RAMP_PER_SEC and PotionState.drift_dir.
+DRIFT_PER_SEC = 4.0
+# Drift speeds up over the round -- 2.5x by the 30s target -- so a steady
+# rhythm stops being enough.
+DRIFT_RAMP_PER_SEC = 0.05
+# heat_up's effect on temp -- crosses the full 0-100 range in a bit over a
+# second, so brief taps (not holds) are what keeps temp near the sweet spot.
+HEAT_PER_SEC = 45.0
+# cool_down's effect on temp.
+COOL_PER_SEC = 45.0
+# How much straying from 50 speeds up the swirl.
+IMBALANCE_TO_RPM = 0.02
+# Talon braking strength on swirl_rpm.
+BRAKE_PER_SEC = 2.5
+# Talon steering strength on swirl_dir.
+STEER_PER_SEC = 1.5
+# Magnitude swirl_dir relaxes toward when neither talon is held.
+BASELINE_DIR = 0.6
+# How fast swirl_dir relaxes toward its current rest_dir.
+DIR_RELAX_PER_SEC = 0.4
+# How close to 0 swirl_dir must be, with no talon held, before rest_dir's
+# sign gets re-rolled -- see PotionState.rest_dir.
+DIR_STALL_THRESHOLD = 0.2
+# Same idea as DIR_STALL_THRESHOLD, for drift_dir when temp coasts near 50.
+TEMP_STALL_THRESHOLD = 5.0
 MIN_RPM = 0.2
-MAX_RPM = 6.0  # Exceeding this is a loss.
-TARGET_SURVIVAL_SEC = 30.0  # Default win condition.
+# Exceeding this is a loss.
+MAX_RPM = 6.0
+# Default win condition.
+TARGET_SURVIVAL_SEC = 30.0
 
-# How far the starting state is randomized from its nominal values (50.0
-# temp, 1.0 rpm) each round, so rounds don't all begin identically.
-INITIAL_TEMP_RANGE = 30.0  # Starting temp: 50 +/- this.
-INITIAL_RPM_RANGE = 0.4  # Starting swirl_rpm: 1.0 +/- this.
+# How far the starting state is randomized from its nominal values each
+# round (temp 50.0 +/- INITIAL_TEMP_RANGE, swirl_rpm 1.0 +/-
+# INITIAL_RPM_RANGE), so rounds don't all begin identically.
+INITIAL_TEMP_RANGE = 30.0
+INITIAL_RPM_RANGE = 0.4
 
 Status = Literal["running", "victory", "failure"]
 Outcome = Literal["victory", "failure", "aborted"]
 
-_STIR_LEFT_BUTTON = 4  # Left talon.
-_STIR_RIGHT_BUTTON = 5  # Right talon.
+# Left talon and right talon.
+_STIR_LEFT_BUTTON = 4
+_STIR_RIGHT_BUTTON = 5
 
 
 @dataclass(frozen=True, slots=True)
 class PotionState:
     """The brew's full state. Immutable -- update() returns a new one."""
 
-    temp: float = 50.0  # 0 = frozen, 50 = ideal, 100 = boiling over.
+    # 0 = frozen, 50 = ideal, 100 = boiling over.
+    temp: float = 50.0
     # +1 (toward boiling) or -1 (toward frozen): which way temp drifts on
     # its own. Re-rolled by update() whenever temp stalls near 50 with
     # neither heat_up nor cool_down held (see TEMP_STALL_THRESHOLD) rather
     # than fixed at +1, so coasting near the sweet spot doesn't always
     # resume heating up.
     drift_dir: float = 1.0
-    swirl_rpm: float = 1.0  # Rotation speed; MAX_RPM or above is a loss.
+    # Rotation speed; MAX_RPM or above is a loss.
+    swirl_rpm: float = 1.0
     # -1 (counter-clockwise) .. 1 (clockwise). Starts at rest_dir, not 0:
     # at exactly 0 the chase band wouldn't move at all (phase advances by
     # swirl_rpm * swirl_dir), so the ring would look static and safe even
@@ -84,7 +105,8 @@ class PotionState:
     # DIR_STALL_THRESHOLD), so braking the swirl to a stop doesn't always
     # resume the same direction.
     rest_dir: float = BASELINE_DIR
-    phase: float = 0.0  # 0-1, the bright chase band's position around the ring.
+    # 0-1, the bright chase band's position around the ring.
+    phase: float = 0.0
     survival_time: float = 0.0
 
 
@@ -263,9 +285,11 @@ def run(*, select_button: int = 8, start_button: int = 9) -> Outcome:
     state = initial_state()
     try:
         while True:
-            controller.poll_pressed()  # Drain the queue; is_held() needs it pumped.
+            # Drain the queue; is_held() needs it pumped.
+            controller.poll_pressed()
             if controller.is_held(select_button) and controller.is_held(start_button):
-                light_control.leds_off()  # No outcome line follows an abort.
+                # No outcome line follows an abort.
+                light_control.leds_off()
                 return "aborted"
 
             state = update(state, TICK_SEC, _read_held())

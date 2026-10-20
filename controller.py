@@ -98,7 +98,8 @@ def poll_pressed() -> str | None:
             pressed = f"button_{event.button}"
         elif (event.type == pygame.JOYAXISMOTION) and (event.axis in _axis_state):
             if abs(event.value) <= _AXIS_THRESHOLD:
-                _axis_state[event.axis] = None  # Back at rest; can fire again.
+                # Back at rest; can fire again.
+                _axis_state[event.axis] = None
                 continue
             direction = _axis_direction(event.axis, event.value)
             if _axis_state[event.axis] != direction:

@@ -47,7 +47,8 @@ from witches import Witch
 # stalled connection is cut loose and retried instead of hanging the show.
 CLIENT = genai.Client(
     http_options=types.HttpOptions(
-        timeout=30_000,  # Milliseconds.
+        # Milliseconds, not seconds.
+        timeout=30_000,
         retry_options=types.HttpRetryOptions(
             attempts=6,
             initial_delay=1.0,
@@ -107,9 +108,11 @@ class RequestStyle(StrEnum):
 class Outcome(StrEnum):
     """The verdict on a collection attempt."""
 
-    SUCCESS = "success"  # Every requested ingredient is present.
-    PARTIAL = "partial"  # Some present, some missing.
-    FAILURE = "failure"  # None of the requested ingredients are present.
+    # SUCCESS: every requested ingredient is present. PARTIAL: some present,
+    # some missing. FAILURE: none of the requested ingredients are present.
+    SUCCESS = "success"
+    PARTIAL = "partial"
+    FAILURE = "failure"
 
 
 @dataclass(frozen=True, slots=True)
@@ -148,9 +151,12 @@ class Spell:
 class Ingredient:
     """One object the witches want fetched."""
 
-    prompt: str  # What the witches say aloud: a plain request or a riddle.
-    answer: str  # The literal object, e.g., "a red leaf".
-    match_terms: tuple[str, ...]  # Lowercased keywords for the tray matcher.
+    # prompt is what the witches say aloud: a plain request or a riddle.
+    # answer is the literal object, e.g., "a red leaf". match_terms are
+    # lowercased keywords for the tray matcher.
+    prompt: str
+    answer: str
+    match_terms: tuple[str, ...]
     style: RequestStyle
 
     @classmethod
@@ -240,7 +246,8 @@ class RoundResult:
 class Challenge:
     """Category mode: a property to satisfy, plus the witch lines that ask for it."""
 
-    category: str  # Completes "something ___", e.g., "round".
+    # Completes "something ___", e.g., "round".
+    category: str
     lines: dict[Witch, str]
     order: tuple[Witch, ...] = tuple(Witch)
 
@@ -274,8 +281,10 @@ class CategoryOutcome:
 
     challenge: Challenge
     satisfied: bool
-    matching_item: str | None  # Which item satisfied it, if any.
-    items_seen: tuple[str, ...]  # Everything visible, for the reaction spell.
+    # matching_item is which item satisfied it, if any; items_seen is
+    # everything visible, for the reaction spell.
+    matching_item: str | None
+    items_seen: tuple[str, ...]
 
 
 def _generate_json(

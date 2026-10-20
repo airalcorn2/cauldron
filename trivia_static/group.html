@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Cauldron of Knowledge</title>
+<style>
+  :root {
+    --team1: #ff6400;
+    --team2: #961edc;
+    --bg: #0d0914;
+    --panel: #1d1428;
+    --text: #f1eaff;
+    --muted: #a898c2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    text-align: center;
+  }
+  [hidden] { display: none !important; }
+
+  /* Intro / join screen */
+  /* #intro has no intrinsic width of its own, so it shrink-wraps to its
+     widest line by default (body centers it as a flex item, but doesn't
+     stretch it) -- that left .joins's own justify-content:center with no
+     extra room to actually redistribute. Forcing #intro to span the full
+     body width gives it that room. */
+  #intro { width: 100%; }
+  h1.title { font-size: 3.4vw; margin: 0; letter-spacing: 0.03em; max-width: 90vw; }
+  .tagline { color: var(--muted); font-size: 1.6vw; margin-top: 0.3rem; }
+  .joins {
+    display: flex;
+    justify-content: center;
+    gap: 4rem;
+    margin-top: 3rem;
+    width: 100%;
+  }
+  .join-card {
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 1.6rem;
+    width: 18vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .join-card img { width: 16vw; height: 16vw; background: white; border-radius: 8px; }
+  .join-card .name { font-size: 1.8vw; font-weight: 700; margin-top: 1rem; }
+  .join-card.team1 .name { color: var(--team1); }
+  .join-card.team2 .name { color: var(--team2); }
+  .scan-hint { color: var(--muted); font-size: 1.2vw; margin-top: 3rem; }
+
+  /* Live round screen */
+  #live { width: 100%; max-width: 1100px; }
+  #round {
+    font-size: 1.3vw;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 1rem;
+  }
+  .scoreboard {
+    display: flex;
+    justify-content: center;
+    gap: 3rem;
+    margin-bottom: 2.5rem;
+  }
+  .score {
+    border-radius: 16px;
+    padding: 1.2rem 2.5rem;
+    font-weight: 700;
+    /* flex: 1, not min-width -- min-width is only a floor, so the longer
+       name ("Team Broomstick") still grew past it while the shorter one
+       ("Team Tarot") sat at the floor, leaving them mismatched again. An
+       equal flex share forces both cards to the same width regardless of
+       how long either team's name is. */
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .score.team1 { border: 3px solid var(--team1); }
+  .score.team2 { border: 3px solid var(--team2); }
+  .score .name { font-size: 1.4vw; color: var(--muted); }
+  .score .n { font-size: 4vw; display: block; }
+  .score.team1 .n { color: var(--team1); }
+  .score.team2 .n { color: var(--team2); }
+  .score.active { box-shadow: 0 0 30px currentColor; }
+
+  #category { font-size: 1.6vw; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; }
+  #clue { font-size: 2.6vw; margin: 1rem 0; line-height: 1.3; }
+  #timer {
+    font-size: 2vw;
+    font-weight: 700;
+    min-height: 1.3em;
+    color: var(--muted);
+    /* Digits in a proportional font aren't all the same width, so the
+       centered text visibly shifts side to side as they change each
+       tick -- tabular-nums fixes every digit glyph to the same width. */
+    font-variant-numeric: tabular-nums;
+  }
+  #timer.low { color: var(--team1); }
+  #turn { font-size: 1.6vw; margin-top: 1rem; font-weight: 600; }
+  #result {
+    font-size: 1.8vw;
+    font-weight: 700;
+    margin-top: 1.5rem;
+    min-height: 1.4em;
+    line-height: 1.3;
+    max-width: 85%;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #result.correct { color: var(--team2); }
+  #result.wrong { color: var(--team1); }
+
+  /* Game-over screen */
+  #gameover { font-size: 3vw; }
+  #gameover .winner { font-size: 5vw; margin: 1rem 0; }
+</style>
+</head>
+<body>
+
+<div id="intro">
+  <h1 class="title">🎃 The Cauldron of Knowledge&nbsp;🎃</h1>
+  <div class="tagline">A Witches' Trivia Showdown</div>
+  <div class="joins">
+    <div class="join-card team1">
+      <img src="/qr/1.svg" alt="QR code to join Team 1">
+      <div class="name" id="team1-name">Team 1</div>
+    </div>
+    <div class="join-card team2">
+      <img src="/qr/2.svg" alt="QR code to join Team 2">
+      <div class="name" id="team2-name">Team 2</div>
+    </div>
+  </div>
+  <div class="scan-hint">Scan your team's code to join on your phone.</div>
+</div>
+
+<div id="live" hidden>
+  <div id="round"></div>
+  <div class="scoreboard">
+    <div class="score team1" id="score1-card">
+      <div class="name" id="score1-name">Team 1</div>
+      <span class="n" id="score1">0</span>
+    </div>
+    <div class="score team2" id="score2-card">
+      <div class="name" id="score2-name">Team 2</div>
+      <span class="n" id="score2">0</span>
+    </div>
+  </div>
+  <div id="category"></div>
+  <div id="clue"></div>
+  <div id="timer"></div>
+  <div id="turn"></div>
+  <div id="result"></div>
+</div>
+
+<div id="gameover" hidden>
+  <div>🏆 Game Over 🏆</div>
+  <div class="winner" id="winner-name"></div>
+</div>
+
+<script>
+let teamNames = { "1": "Team 1", "2": "Team 2" };
+
+fetch("/teams").then(r => r.json()).then(data => {
+  document.title = data.title;
+  document.querySelector(".title").textContent = `🎃 ${data.title} 🎃`;
+  teamNames = data.teams;
+  document.getElementById("team1-name").textContent = teamNames["1"];
+  document.getElementById("team2-name").textContent = teamNames["2"];
+  document.getElementById("score1-name").textContent = teamNames["1"];
+  document.getElementById("score2-name").textContent = teamNames["2"];
+});
+
+const introEl = document.getElementById("intro");
+const liveEl = document.getElementById("live");
+const gameoverEl = document.getElementById("gameover");
+const roundEl = document.getElementById("round");
+const categoryEl = document.getElementById("category");
+const clueEl = document.getElementById("clue");
+const turnEl = document.getElementById("turn");
+const resultEl = document.getElementById("result");
+const timerEl = document.getElementById("timer");
+
+const ws = new WebSocket(`ws://${location.host}/ws`);
+
+// Countdown is driven by a Unix deadline from the server (see
+// trivia_web.Server.broadcast_timer()), not a plain "seconds" count -- a
+// snapshot replay on reconnect carries the same deadline regardless of
+// when it's replayed, so the displayed time is always correct even if
+// this page loaded mid-wait.
+let timerInterval = null;
+
+function stopTimer() {
+  if (timerInterval !== null) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  timerEl.textContent = "";
+  timerEl.classList.remove("low");
+}
+
+function startTimer(deadline) {
+  const tick = () => {
+    const remaining = Math.max(0, deadline - Date.now() / 1000);
+    const minutes = Math.floor(remaining / 60);
+    const seconds = Math.floor(remaining % 60);
+    timerEl.textContent = `⏳ ${minutes}:${String(seconds).padStart(2, "0")}`;
+    timerEl.classList.toggle("low", remaining <= 10);
+    if (remaining <= 0) {
+      stopTimer();
+    }
+  };
+  if (timerInterval !== null) {
+    clearInterval(timerInterval);
+  }
+  tick();
+  timerInterval = setInterval(tick, 250);
+}
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+
+  if (data.type === "state") {
+    document.getElementById("score1").textContent = data.scores["1"];
+    document.getElementById("score2").textContent = data.scores["2"];
+    // answering_team is whoever may actually submit right now -- during a
+    // steal that's the OTHER team from current_team, so highlight that one.
+    const answering = data.answering_team ?? data.current_team;
+    document.getElementById("score1-card").classList.toggle("active", answering === 1);
+    document.getElementById("score2-card").classList.toggle("active", answering === 2);
+  } else if (data.type === "prompt") {
+    introEl.hidden = true;
+    liveEl.hidden = false;
+    roundEl.textContent = `Round ${data.round}`;
+    categoryEl.textContent = data.category;
+    clueEl.textContent = data.clue;
+    turnEl.textContent = data.phase === "steal"
+      ? `🔮 Steal chance for ${teamNames[data.team]}!`
+      : `${teamNames[data.team]}'s turn to answer.`;
+    resultEl.textContent = "";
+    resultEl.className = "";
+    stopTimer();  // The clock hasn't started yet -- the clue is still being read.
+  } else if (data.type === "timer") {
+    startTimer(data.deadline);
+  } else if (data.type === "result") {
+    resultEl.textContent = `${data.correct ? "✓" : "✗"} ${data.banter}`;
+    resultEl.className = data.correct ? "correct" : "wrong";
+    stopTimer();
+  } else if (data.type === "end") {
+    liveEl.hidden = true;
+    gameoverEl.hidden = false;
+    stopTimer();
+    document.getElementById("winner-name").textContent = `${teamNames[data.winner]} wins!`;
+  }
+};
+</script>
+
+</body>
+</html>

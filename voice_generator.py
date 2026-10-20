@@ -30,28 +30,28 @@ from witches import WITCHES, Witch, WitchProfile
 ELEVENLABS_API_KEY = os.environ["ELEVENLABS_API_KEY"]
 ELEVENLABS_VOICES_URL = "https://api.elevenlabs.io/v1/voices"
 ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-ELEVENLABS_MODEL_ID = "eleven_multilingual_v2"
+ELEVENLABS_MODEL_ID = "eleven_v4"
 TTS_TIMEOUT_SEC = 10.0
 OUTPUT_DIR = Path("generated")
 
 
 @dataclass(frozen=True, slots=True)
 class VoiceSettings:
-    """ElevenLabs delivery controls.
+    """ElevenLabs delivery controls for eleven_v4.
 
     stability          Higher is steadier in pitch and rhythm; lower is more
                        expressive but erratic.
     similarity_boost   Higher tracks the source voice more closely.
-    style              Higher exaggerates cadence and is the main cause of odd
-                       lilt, so keep it low.
-    speed              Range 0.7-1.2. 1.0 is natural; below 1.0 slows delivery.
     use_speaker_boost  Sharpens the voice at a small latency cost.
+
+    v4 dropped the style/speed sliders v2 had -- it reads emphasis, pacing,
+    and emotion from the text itself instead (punctuation, and bracketed
+    Audio Tags like "[stress on next word]"; see trivia_game.py/trivia_data.py
+    for where this project actually inserts those).
     """
 
     stability: float
     similarity_boost: float
-    style: float
-    speed: float = 1.0
     use_speaker_boost: bool = True
 
     def as_payload(self) -> dict[str, float | bool]:
@@ -72,8 +72,6 @@ def _voice_settings(profile: WitchProfile) -> VoiceSettings:
     return VoiceSettings(
         stability=profile.stability,
         similarity_boost=profile.similarity_boost,
-        style=profile.style,
-        speed=profile.speed,
         use_speaker_boost=profile.use_speaker_boost,
     )
 
