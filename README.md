@@ -11,6 +11,7 @@ See [Materials](docs/materials.md) for the full parts list.
 - [Modes](#modes)
 - [Live Mode Switching](#live-mode-switching)
 - [Trivia](#trivia)
+- [Hex Hollow Bridge](#hex-hollow-bridge)
 - [Software Layout](#software-layout)
 - [Setting Up](#setting-up)
   - [Step 1: Setting Up Raspberry Pi OS](#step-1-setting-up-raspberry-pi-os)
@@ -95,6 +96,15 @@ Answers are free text — just the answer itself, not phrased as a question — 
 Unlike every other mode in this project, that live grading means trivia genuinely needs network access during play, not just to prepare beforehand.
 See `trivia_game.py` for the exact rules and [docs/trivia.md](docs/trivia.md) for how to prepare and host a round.
 
+## Hex Hollow Bridge
+
+A standalone HTTP bridge for Hex Hollow, a separate Godot game (a top-down witch-and-cauldron ingredient hunt) played on its own device on the same LAN rather than through this project's gamepad.
+Run `.venv/bin/python game_bridge.py` instead of `cauldron_controller.py` — both want the same LED ring and audio hardware, so this replaces the live show for as long as the game's being played, the same way `trivia_game.py` does.
+It prints the address to enter into the game's own `CauldronBridge.BASE_URL` setting.
+Idle, the ring bubbles under a chasing rainbow, same as the main show's own idle look.
+Dropping an ingredient into the game's cauldron splashes and flashes the ring in that ingredient's color while a random witch names it, without interrupting the idle rainbow underneath; finishing the spell has a witch announce it, then all three witches recite a fixed victory spell in turn before a victory swirl.
+See `game_bridge.py` for the exact routes.
+
 ## Software Layout
 
 `cauldron_controller.py` orchestrates the show.
@@ -115,6 +125,7 @@ Each hardware or service component is a standalone module that also runs on its 
 | `trivia_data.py` | One-time download/filter/voice-cache prep for the trivia question bank | `.venv/bin/python trivia_data.py` |
 | `trivia_game.py` | The trivia game's turn/steal/scoring rules and round orchestration | `.venv/bin/python trivia_game.py` |
 | `trivia_web.py` | The HTTP+WebSocket server and the group/team pages, plus QR code generation | `.venv/bin/python trivia_web.py` |
+| `game_bridge.py` | HTTP bridge letting the separate Hex Hollow Godot game trigger real witch/light reactions | `.venv/bin/python game_bridge.py` |
 
 Every module accepts `--help`.
 

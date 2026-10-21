@@ -428,16 +428,15 @@ def select_clues(pool: list[Clue], count: int, batch: int) -> list[Clue]:
         sample_rng.shuffle(round_pool)
         actual = _even_count(min(target, len(round_pool)))
         start = batch * actual
-        batch_slice = round_pool[start : start + actual]
-        if len(batch_slice) < actual:
+        chunk = round_pool[start : start + actual]
+        if len(chunk) < actual:
             raise ValueError(
                 f"Round {round_num} doesn't have enough unused clues left for "
-                f"batch {batch} (needed {actual}, only {len(batch_slice)} left "
-                f"after the {start} already claimed by earlier batches) -- "
-                "lower --count, pick an earlier --batch, or widen the keyword "
-                "filter."
+                f"batch {batch} (needed {actual}, only {len(chunk)} left after "
+                f"the {start} already claimed by earlier batches) -- lower "
+                "--count, pick an earlier --batch, or widen the keyword filter."
             )
-        sampled.extend(batch_slice)
+        sampled.extend(chunk)
 
     witch_rng = random.Random(WITCH_SEED)
     return [replace(clue, witch=witch_rng.choice(list(Witch))) for clue in sampled]

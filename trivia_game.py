@@ -19,6 +19,10 @@ Rules:
     call and not a local heuristic.
   - Primary wrong (or timed out) -> the other team gets one steal attempt
     at the same clue before the next (alternating) clue is dealt.
+  - A tied score once the pool runs out goes to sudden death: a single
+    numeric question (see TIEBREAKER_QUESTIONS) that both teams answer at
+    once, not alternating turns -- whichever guess lands closer to the
+    real, sourced answer wins outright.
 
 Phones join and answer over trivia_web.py's WebSocket; this module owns
 the rules, trivia_web.py owns the HTTP/WebSocket plumbing. Both run as
@@ -53,6 +57,7 @@ import audio
 import light_control
 import trivia_web
 from trivia_data import AUDIO_CACHE_DIR, OUTPUT_PATH, Clue
+from trivia_tiebreakers import TIEBREAKER_QUESTIONS, NumericTiebreaker
 from voice_generator import VOICES, generate_to_path
 from witches import WITCHES, Witch
 
@@ -157,9 +162,14 @@ def _warning_audio_path(witch: Witch, team: TeamId, index: int) -> Path:
     return AUDIO_CACHE_DIR / f"_warning_{witch}_{team}_{index}.mp3"
 
 
+def _tiebreaker_audio_path(witch: Witch, index: int) -> Path:
+    return AUDIO_CACHE_DIR / f"_tiebreaker_{witch}_{index}.mp3"
+
+
 async def ensure_line_cache() -> None:
     """Pre-synthesize every (witch, team, line) combination of
-    STEAL_LINES/WARNING_LINES, if not already cached. Safe to call every
+    STEAL_LINES/WARNING_LINES, plus one reading per witch of each
+    TIEBREAKER_QUESTIONS entry, if not already cached. Safe to call every
     time a round starts -- a no-op once the full cross product exists.
 
     Sequential, not gathered -- same reasoning as
@@ -177,9 +187,13 @@ async def ensure_line_cache() -> None:
                 path = _warning_audio_path(witch, team, index)
                 if not path.exists():
                     missing.append((path, line.format(team=TEAM_NAMES[team]), witch))
+        for index, tiebreaker in enumerate(TIEBREAKER_QUESTIONS):
+            path = _tiebreaker_audio_path(witch, index)
+            if not path.exists():
+                missing.append((path, tiebreaker.question, witch))
     if not missing:
         return
-    print(f"Pre-synthesizing {len(missing)} steal/warning line(s) (one-time).")
+    print(f"Pre-synthesizing {len(missing)} steal/warning/tiebreaker line(s) (one-time).")
     for path, text, witch in missing:
         await generate_to_path(text, VOICES[witch], path)
 
@@ -374,6 +388,40 @@ def other_team(team: TeamId) -> TeamId:
     return 2 if team == 1 else 1
 
 
+_NUMBER_PATTERN = re.compile(r"-?\d[\d,]*(?:\.\d+)?")
+
+
+def extract_number(text: str) -> float | None:
+    """Pull the first plain number out of free text, or None if it
+    doesn't contain one -- a tiebreaker guess can be phrased any which
+    way ("about 19", "I'd say 19 people"), not just a bare digit string.
+    Thousands commas are stripped before parsing; anything else
+    (fractions, number words) isn't handled."""
+    match = _NUMBER_PATTERN.search(text)
+    if match is None:
+        return None
+    return float(match.group().replace(",", ""))
+
+
+def closest_team(
+    guess_1: float | None, guess_2: float | None, answer: float
+) -> TeamId | None:
+    """Whichever guess lands nearer ``answer`` wins outright. None if
+    neither guess parsed, or if both land exactly as close -- the caller
+    then needs a genuine coin flip (see _play_tiebreaker())."""
+    if (guess_1 is None) and (guess_2 is None):
+        return None
+    if guess_1 is None:
+        return 2
+    if guess_2 is None:
+        return 1
+    distance_1 = abs(guess_1 - answer)
+    distance_2 = abs(guess_2 - answer)
+    if distance_1 == distance_2:
+        return None
+    return 1 if distance_1 < distance_2 else 2
+
+
 @dataclass
 class TriviaState:
     """The round's full state. Mutated via submit_answer()/start_clue(),
@@ -536,170 +584,16 @@ async def run(*, host: str = "0.0.0.0", port: int = 8080) -> TriviaState:
     try:
         state = start_clue(state)
         while state.active_clue is not None:
-            clue = state.active_clue
-            # Assigned once by trivia_data.select_clues().
-            witch = Witch(clue.witch)
-            # Computed before any broadcast so both broadcast_state()'s
-            # highlight and broadcast_prompt()'s "whose turn" agree -- during
-            # a steal, this is the OTHER team from state.current_team.
-            answerer = current_answerer(state)
-            await server.broadcast_state(state, answering_team=answerer)
-            # Show the clue on the group screen as soon as the witch starts
-            # reading it, not once she's done -- broadcast_prompt() before
-            # the (blocking) audio playback, not after.
-            await server.broadcast_prompt(answerer, clue, state.phase)
-            # Idle rainbow starts here, before the witch even starts
-            # talking, and keeps spinning straight through both the
-            # reading and the answer wait below -- the room's attention is
-            # most on the ring right as a clue begins, so it shouldn't go
-            # dark at exactly that moment.
-            await loop.run_in_executor(None, light_control.start_rainbow)
-            if state.phase == "primary":
-                await loop.run_in_executor(
-                    None,
-                    audio.play_file,
-                    _clue_audio_path(witch, clue.id),
-                    True,
-                    audio.WITCH_VOLUMES[witch],
-                )
-            else:
-                # Don't re-read the clue -- it's the same question, just
-                # reopened for the other team; a short in-character steal
-                # announcement instead of the full question again.
-                # Pre-cached (see ensure_line_cache()), not synthesized here.
-                steal_index = random.randrange(len(STEAL_LINES))
-                await loop.run_in_executor(
-                    None,
-                    audio.play_file,
-                    _steal_audio_path(witch, answerer, steal_index),
-                    True,
-                    audio.WITCH_VOLUMES[witch],
-                )
-
-            # The rainbow (already spinning since before the reading
-            # started) keeps going through the team's answer wait, the
-            # submission splash, and Gemini's judging below -- stopped
-            # only once, right before the outcome lighting takes over.
-            #
-            # The countdown starts here, not when the prompt was first
-            # broadcast -- the clue/steal line's own (variable-length)
-            # reading just finished, so this is the actual moment the
-            # answer clock begins.
-            await server.broadcast_timer(ANSWER_TIMEOUT_SEC)
-            warning_task = asyncio.create_task(_speak_warning(loop, witch, answerer))
-            try:
-                response = await asyncio.wait_for(
-                    server.wait_for_answer(answerer), timeout=ANSWER_TIMEOUT_SEC
-                )
-            except asyncio.TimeoutError:
-                response = None
-            finally:
-                # A response (or the full timeout) landed before
-                # WARNING_LEAD_SEC was even reached -- no point warning
-                # about a clock that's already stopped mattering.
-                if not warning_task.done():
-                    warning_task.cancel()
-                try:
-                    await warning_task
-                except asyncio.CancelledError:
-                    pass
-
-            if response is not None:
-                # A submission actually landed (as opposed to the clock
-                # running out) -- a quick splash of sound and light marking
-                # the moment, distinct from the eventual correct/incorrect
-                # outcome below (not known yet -- judge_answer() hasn't
-                # run). trigger_splash() composites a burst of brightness
-                # pops directly into the still-spinning rainbow (same
-                # technique potion_play.py uses for its heat bubbles)
-                # rather than taking the ring over -- no stop/restart
-                # dance, and no dark gap before the rainbow "resumes" (it
-                # never stopped).
-                light_control.trigger_splash()
-                # No volume arg -- SPLASH_SFX_PATH is now a prerendered
-                # .wav (see audio._ensure_splash_audio()) with
-                # SPLASH_VOLUME already baked in; aplay has no live
-                # volume flag to apply it with anyway.
-                await loop.run_in_executor(None, audio.play_file, audio.SPLASH_SFX_PATH)
-            # The witch-laugh "something's happening" cue, same one react
-            # mode pairs with its own API wait (see
-            # cauldron_controller._start_ambience()) -- starts the instant
-            # the wait is over either way (after the splash if there was
-            # one), filling what would otherwise be dead air through
-            # judging below, including on a bare timeout with no splash at
-            # all. No flicker takeover here, unlike react mode; the
-            # rainbow just keeps spinning alongside it.
-            await loop.run_in_executor(None, audio.start_laugh)
-
-            verdict = await judge_answer(
-                witch, clue.category, clue.clue, clue.response, response, state.phase
-            )
-
-            # Still rainbow-lit and laughing here, deliberately --
-            # generate_to_path() below is a real ElevenLabs synthesis call
-            # with its own nontrivial wait, and stopping either one before
-            # it would cut them off for that whole stretch, not just the
-            # instant between judging and the banter actually starting.
-            # Both stop right before the outcome's steady color and the
-            # banter itself take over instead, once there's actually
-            # something else ready to play/paint.
-            await generate_to_path(
-                verdict.spoken_banter, VOICES[witch], _BANTER_AUDIO_PATH
-            )
-            await loop.run_in_executor(None, audio.stop_laugh)
-            await loop.run_in_executor(None, light_control.stop_rainbow)
-            speak_banter = loop.run_in_executor(
-                None,
-                audio.play_file,
-                _BANTER_AUDIO_PATH,
-                True,
-                audio.WITCH_VOLUMES[witch],
-            )
-
-            team_up = answerer
-            await server.broadcast_result(
-                team_up, verdict.correct, state.phase, verdict.banter
-            )
-            # Hold a solid, outcome-appropriate color for the ENTIRE banter
-            # line, then run a quick flourish once it's done -- not the
-            # other way around. celebrate()/fizzle() are fixed-duration
-            # animations (celebrate()'s 6 blinks is ~0.7s, fizzle()'s fade
-            # ~1s), too short to gather alongside an arbitrary-length
-            # banter line without risking a dark ring for whatever's left
-            # once the animation ends. A plain set_leds() call needs no
-            # such gather: the strip just holds whatever it was last
-            # painted, with no further CPU/SPI involvement, for exactly as
-            # long as nothing else repaints it -- i.e., for the full,
-            # actual duration of speak_banter, whatever that turns out to
-            # be. Mirrors how cauldron_controller.py already uses
-            # celebrate() elsewhere: as a flourish AFTER the voice line,
-            # not during it.
-            if verdict.correct:
-                await loop.run_in_executor(
-                    None, light_control.set_leds, TEAM_COLORS[team_up]
-                )
-                await speak_banter
-                await loop.run_in_executor(
-                    None, light_control.celebrate, TEAM_COLORS[team_up]
-                )
-            elif state.phase == "steal":
-                await loop.run_in_executor(
-                    None, light_control.set_leds, light_control.RED
-                )
-                await speak_banter
-                await loop.run_in_executor(None, light_control.fizzle)
-            else:
-                await loop.run_in_executor(
-                    None, light_control.set_leds, light_control.RED
-                )
-                await speak_banter
-                await loop.run_in_executor(None, light_control.leds_off)
-
-            state = submit_answer(state, verdict.correct)
+            state = await _play_attempt(state, server, loop)
             if state.active_clue is None:
                 state = start_clue(state)
 
-        winner: TeamId = 1 if state.team_scores[1] >= state.team_scores[2] else 2
+        if state.team_scores[1] == state.team_scores[2]:
+            question = random.choice(TIEBREAKER_QUESTIONS)
+            print(f"Scores tied -- sudden death: {question.question}")
+            winner: TeamId = await _play_tiebreaker(server, loop, question)
+        else:
+            winner = 1 if state.team_scores[1] > state.team_scores[2] else 2
         await server.broadcast_state(state)
         await server.broadcast_end(state, winner)
         await loop.run_in_executor(
@@ -716,6 +610,223 @@ async def run(*, host: str = "0.0.0.0", port: int = 8080) -> TriviaState:
         # it actually stops, now that the round itself is over.
         await loop.run_in_executor(None, audio.stop_bubbling_background)
         await server.stop()
+
+
+async def _play_attempt(
+    state: TriviaState, server: trivia_web.Server, loop: asyncio.AbstractEventLoop
+) -> TriviaState:
+    """Resolve exactly one attempt (primary or steal) at ``state``'s
+    active clue -- reading it, waiting for an answer, judging it, and
+    lighting the outcome -- returning the updated state.
+
+    Extracted out of run()'s main loop so the sudden-death tiebreaker
+    (also in run()) can drive the same per-attempt logic against its own
+    small reserve of clues, rather than duplicating it.
+    """
+    clue = state.active_clue
+    assert clue is not None
+    # Assigned once by trivia_data.select_clues().
+    witch = Witch(clue.witch)
+    # Computed before any broadcast so both broadcast_state()'s
+    # highlight and broadcast_prompt()'s "whose turn" agree -- during
+    # a steal, this is the OTHER team from state.current_team.
+    answerer = current_answerer(state)
+    await server.broadcast_state(state, answering_team=answerer)
+    # Show the clue on the group screen as soon as the witch starts
+    # reading it, not once she's done -- broadcast_prompt() before
+    # the (blocking) audio playback, not after.
+    await server.broadcast_prompt(answerer, clue, state.phase)
+    # Idle rainbow starts here, before the witch even starts
+    # talking, and keeps spinning straight through both the
+    # reading and the answer wait below -- the room's attention is
+    # most on the ring right as a clue begins, so it shouldn't go
+    # dark at exactly that moment.
+    await loop.run_in_executor(None, light_control.start_rainbow)
+    if state.phase == "primary":
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _clue_audio_path(witch, clue.id),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+    else:
+        # Don't re-read the clue -- it's the same question, just
+        # reopened for the other team; a short in-character steal
+        # announcement instead of the full question again.
+        # Pre-cached (see ensure_line_cache()), not synthesized here.
+        steal_index = random.randrange(len(STEAL_LINES))
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _steal_audio_path(witch, answerer, steal_index),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+
+    # The rainbow (already spinning since before the reading
+    # started) keeps going through the team's answer wait, the
+    # submission splash, and Gemini's judging below -- stopped
+    # only once, right before the outcome lighting takes over.
+    #
+    # The countdown starts here, not when the prompt was first
+    # broadcast -- the clue/steal line's own (variable-length)
+    # reading just finished, so this is the actual moment the
+    # answer clock begins.
+    await server.broadcast_timer(ANSWER_TIMEOUT_SEC)
+    warning_task = asyncio.create_task(_speak_warning(loop, witch, answerer))
+    try:
+        response = await asyncio.wait_for(
+            server.wait_for_answer(answerer), timeout=ANSWER_TIMEOUT_SEC
+        )
+    except asyncio.TimeoutError:
+        response = None
+    finally:
+        # A response (or the full timeout) landed before
+        # WARNING_LEAD_SEC was even reached -- no point warning
+        # about a clock that's already stopped mattering.
+        if not warning_task.done():
+            warning_task.cancel()
+        try:
+            await warning_task
+        except asyncio.CancelledError:
+            pass
+
+    if response is not None:
+        # A submission actually landed (as opposed to the clock
+        # running out) -- a quick splash of sound and light marking
+        # the moment, distinct from the eventual correct/incorrect
+        # outcome below (not known yet -- judge_answer() hasn't
+        # run). trigger_splash() composites a burst of brightness
+        # pops directly into the still-spinning rainbow (same
+        # technique potion_play.py uses for its heat bubbles)
+        # rather than taking the ring over -- no stop/restart
+        # dance, and no dark gap before the rainbow "resumes" (it
+        # never stopped).
+        light_control.trigger_splash()
+        # No volume arg -- SPLASH_SFX_PATH is now a prerendered
+        # .wav (see audio._ensure_splash_audio()) with
+        # SPLASH_VOLUME already baked in; aplay has no live
+        # volume flag to apply it with anyway.
+        await loop.run_in_executor(None, audio.play_file, audio.SPLASH_SFX_PATH)
+    # The witch-laugh "something's happening" cue, same one react
+    # mode pairs with its own API wait (see
+    # cauldron_controller._start_ambience()) -- starts the instant
+    # the wait is over either way (after the splash if there was
+    # one), filling what would otherwise be dead air through
+    # judging below, including on a bare timeout with no splash at
+    # all. No flicker takeover here, unlike react mode; the
+    # rainbow just keeps spinning alongside it.
+    await loop.run_in_executor(None, audio.start_laugh)
+
+    verdict = await judge_answer(
+        witch, clue.category, clue.clue, clue.response, response, state.phase
+    )
+
+    # Still rainbow-lit and laughing here, deliberately --
+    # generate_to_path() below is a real ElevenLabs synthesis call
+    # with its own nontrivial wait, and stopping either one before
+    # it would cut them off for that whole stretch, not just the
+    # instant between judging and the banter actually starting.
+    # Both stop right before the outcome's steady color and the
+    # banter itself take over instead, once there's actually
+    # something else ready to play/paint.
+    await generate_to_path(verdict.spoken_banter, VOICES[witch], _BANTER_AUDIO_PATH)
+    await loop.run_in_executor(None, audio.stop_laugh)
+    await loop.run_in_executor(None, light_control.stop_rainbow)
+    speak_banter = loop.run_in_executor(
+        None,
+        audio.play_file,
+        _BANTER_AUDIO_PATH,
+        True,
+        audio.WITCH_VOLUMES[witch],
+    )
+
+    team_up = answerer
+    await server.broadcast_result(team_up, verdict.correct, state.phase, verdict.banter)
+    # Hold a solid, outcome-appropriate color for the ENTIRE banter
+    # line, then run a quick flourish once it's done -- not the
+    # other way around. celebrate()/fizzle() are fixed-duration
+    # animations (celebrate()'s 6 blinks is ~0.7s, fizzle()'s fade
+    # ~1s), too short to gather alongside an arbitrary-length
+    # banter line without risking a dark ring for whatever's left
+    # once the animation ends. A plain set_leds() call needs no
+    # such gather: the strip just holds whatever it was last
+    # painted, with no further CPU/SPI involvement, for exactly as
+    # long as nothing else repaints it -- i.e., for the full,
+    # actual duration of speak_banter, whatever that turns out to
+    # be. Mirrors how cauldron_controller.py already uses
+    # celebrate() elsewhere: as a flourish AFTER the voice line,
+    # not during it.
+    if verdict.correct:
+        await loop.run_in_executor(None, light_control.set_leds, TEAM_COLORS[team_up])
+        await speak_banter
+        await loop.run_in_executor(None, light_control.celebrate, TEAM_COLORS[team_up])
+    elif state.phase == "steal":
+        await loop.run_in_executor(None, light_control.set_leds, light_control.RED)
+        await speak_banter
+        await loop.run_in_executor(None, light_control.fizzle)
+    else:
+        await loop.run_in_executor(None, light_control.set_leds, light_control.RED)
+        await speak_banter
+        await loop.run_in_executor(None, light_control.leds_off)
+
+    return submit_answer(state, verdict.correct)
+
+
+async def _play_tiebreaker(
+    server: trivia_web.Server,
+    loop: asyncio.AbstractEventLoop,
+    question: NumericTiebreaker,
+) -> TeamId:
+    """Sudden death: both teams guess the SAME numeric question at once --
+    no turns, no steal -- and whichever guess lands closer to the real
+    answer (see closest_team()) wins outright. Falls back to an honest
+    coin flip only if neither guess parses as a number, or both land
+    exactly as close (vanishingly unlikely, but needs a real resolution
+    rather than quietly favoring Team 1 -- the bug that prompted this
+    whole feature).
+
+    The idle rainbow is restarted for the reading/thinking wait, same as
+    _play_attempt(), then stopped right before the result lighting in
+    run()'s tail takes over.
+    """
+    witch = random.choice(list(Witch))
+    index = TIEBREAKER_QUESTIONS.index(question)
+    await server.broadcast_tiebreaker(question.question)
+    await loop.run_in_executor(None, light_control.start_rainbow)
+    await loop.run_in_executor(
+        None,
+        audio.play_file,
+        _tiebreaker_audio_path(witch, index),
+        True,
+        audio.WITCH_VOLUMES[witch],
+    )
+    await server.broadcast_timer(ANSWER_TIMEOUT_SEC)
+
+    async def _wait(team: TeamId) -> float | None:
+        try:
+            text = await asyncio.wait_for(
+                server.wait_for_answer(team), timeout=ANSWER_TIMEOUT_SEC
+            )
+        except asyncio.TimeoutError:
+            return None
+        return extract_number(text)
+
+    guess_1, guess_2 = await asyncio.gather(_wait(1), _wait(2))
+    winner = closest_team(guess_1, guess_2, question.answer)
+    if winner is None:
+        winner = 1 if random.random() < 0.5 else 2
+
+    await loop.run_in_executor(None, light_control.stop_rainbow)
+    await server.broadcast_tiebreaker_result(
+        guess_1=guess_1,
+        guess_2=guess_2,
+        answer=question.answer,
+        source=question.source,
+        winner=winner,
+    )
+    return winner
 
 
 def main() -> None:

@@ -152,6 +152,7 @@ if (!myTeam) {
       categoryEl.textContent = data.category;
       clueEl.textContent = data.clue;
       answerEl.value = "";
+      answerEl.placeholder = "Just the answer -- no need to phrase it as a question.";
       const myTurn = data.team === myTeam;
       answerEl.disabled = !myTurn;
       submitEl.disabled = !myTurn;
@@ -159,6 +160,17 @@ if (!myTeam) {
       statusEl.textContent = myTurn
         ? (steal ? "🔮 Steal chance -- answer below!" : "Your team's turn -- answer below!")
         : (steal ? `${teamNames[data.team]} is trying to steal...` : `${teamNames[data.team]} is answering...`);
+    } else if (data.type === "tiebreaker") {
+      // Sudden death -- unlike a normal prompt, BOTH teams can answer
+      // this one at once, so there's no "myTurn" gate here.
+      promptEl.hidden = false;
+      categoryEl.textContent = "🎃 SUDDEN DEATH -- CLOSEST GUESS WINS";
+      clueEl.textContent = data.question;
+      answerEl.value = "";
+      answerEl.placeholder = "Your best numeric guess...";
+      answerEl.disabled = false;
+      submitEl.disabled = false;
+      statusEl.textContent = "Tied game! Both teams guess -- closest wins it all.";
     } else if (data.type === "ack") {
       if (data.accepted) {
         statusEl.textContent = "Answer submitted! Waiting on the witches...";
@@ -171,6 +183,15 @@ if (!myTeam) {
       answerEl.disabled = true;
       submitEl.disabled = true;
       statusEl.textContent = `${data.correct ? "✓" : "✗"} ${data.banter}`;
+    } else if (data.type === "tiebreaker_result") {
+      answerEl.disabled = true;
+      submitEl.disabled = true;
+      const g1 = data.guess_1 ?? "no guess";
+      const g2 = data.guess_2 ?? "no guess";
+      statusEl.textContent =
+        `The real answer: ${data.answer} (${data.source}). ` +
+        `${teamNames["1"]} guessed ${g1}, ${teamNames["2"]} guessed ${g2}. ` +
+        `${teamNames[data.winner]} wins!`;
     } else if (data.type === "end") {
       promptEl.hidden = true;
       statusEl.textContent = `Game over! ${teamNames[data.winner]} wins!`;

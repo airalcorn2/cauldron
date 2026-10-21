@@ -71,6 +71,12 @@ Each clue is read aloud by whichever witch `trivia_data.py` assigned it (randoml
 That same witch then judges the answer and delivers an in-character line reacting to it specifically, before the next clue goes out.
 See the [README's Trivia section](../README.md#trivia) for the turn/steal rules, and `trivia_game.py` itself for the exact implementation.
 
+If the two teams are still tied once the main pool runs out, the round doesn't just end there: it goes to sudden death.
+A witch reads one numeric question, picked at random from a bank of 50 hand-curated, individually sourced questions (see `TIEBREAKER_QUESTIONS` in `trivia_game.py`) -- both teams' phones open at once, not alternating turns, and whichever guess lands closer to the real answer wins outright.
+A few entries (franchise film counts, the 2023 Halloween-spending figure) are scoped to a specific date or year rather than claimed as eternally true -- worth a quick re-check against their cited source before reusing this bank many years from now.
+The real answer and its source are revealed either way, so the room can see it wasn't made up.
+If neither guess parses as a number, or both land exactly as close (vanishingly unlikely), the winner's a genuine coin flip rather than defaulting to Team 1.
+
 ## Troubleshooting
 
 - **"not found -- run trivia_data.py once first"**: exactly what it says — the prep step above hasn't been run yet, or `trivia/horror_clues.json` got deleted.

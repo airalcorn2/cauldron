@@ -15,7 +15,9 @@ just rendering them differently:
   - **team** (`/team/<id>`) -- meant for one team's phones. Reached by
     scanning that team's QR code (or typing the URL), so there's no
     manual "join" step; shows the scoreboard and a free-text answer box,
-    enabled only when it's this team's turn.
+    normally enabled only when it's this team's turn -- except during a
+    tied-score sudden-death tiebreaker, where both teams' boxes open at
+    once for a single numeric guess.
 
 trivia_game.py owns all the actual rules; this module only knows
 "broadcast this to everyone" and "give me the next answer from team N"
@@ -78,6 +80,8 @@ class Server:
     _last_timer: dict | None = None
     _last_result: dict | None = None
     _last_end: dict | None = None
+    _last_tiebreaker: dict | None = None
+    _last_tiebreaker_result: dict | None = None
 
     async def _broadcast(self, message: dict) -> None:
         payload = json.dumps(message)
@@ -168,6 +172,47 @@ class Server:
         self._last_end = message
         await self._broadcast(message)
 
+    async def broadcast_tiebreaker(self, question: str) -> None:
+        """Announce a sudden-death numeric question -- unlike
+        broadcast_prompt(), BOTH teams may answer this one, not just
+        whoever's turn it normally is. Resets the already-answered guard
+        the same way, and clears the last real clue's prompt/timer/result
+        so a page reconnecting mid-tiebreaker renders this instead of
+        replaying stale state from the clue that ended the main round."""
+        self._answered = set()
+        for q in self._answers.values():
+            while not q.empty():
+                q.get_nowait()
+        message = {"type": "tiebreaker", "question": question}
+        self._last_tiebreaker = message
+        self._last_prompt = None
+        self._last_timer = None
+        self._last_result = None
+        self._last_tiebreaker_result = None
+        await self._broadcast(message)
+
+    async def broadcast_tiebreaker_result(
+        self,
+        *,
+        guess_1: float | None,
+        guess_2: float | None,
+        answer: float,
+        source: str,
+        winner: "TeamId",
+    ) -> None:
+        """Reveal both guesses, the real (sourced) answer, and who won,
+        once the sudden-death tiebreaker resolves."""
+        message = {
+            "type": "tiebreaker_result",
+            "guess_1": guess_1,
+            "guess_2": guess_2,
+            "answer": answer,
+            "source": source,
+            "winner": winner,
+        }
+        self._last_tiebreaker_result = message
+        await self._broadcast(message)
+
     async def _send_snapshot(self, ws: web.WebSocketResponse) -> None:
         """Replay the latest cached broadcast of each type to one socket --
         called right after it connects, so a freshly loaded or reloaded
@@ -178,6 +223,8 @@ class Server:
             self._last_prompt,
             self._last_timer,
             self._last_result,
+            self._last_tiebreaker,
+            self._last_tiebreaker_result,
             self._last_end,
         ):
             if message is not None:

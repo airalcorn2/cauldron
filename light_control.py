@@ -98,11 +98,11 @@ _flicker_stop: threading.Event | None = None
 _rainbow_thread: threading.Thread | None = None
 _rainbow_stop: threading.Event | None = None
 # Transient brightness pops laid over whatever start_rainbow()'s own loop
-# is painting -- see trigger_splash(). (pixel, spawn_time, lifetime)
+# is painting -- see trigger_splash(). (pixel, spawn_time, lifetime, color)
 # tuples; only the rainbow thread ever reads/prunes this, and
 # trigger_splash() only ever appends to it, so there's nothing for the two
 # threads to corrupt by racing on it.
-_splash_pops: list[tuple[int, float, float]] = []
+_splash_pops: list[tuple[int, float, float, RGB]] = []
 # Pops spawned per trigger_splash() call.
 _SPLASH_POP_COUNT = 26
 # Neighboring pixels catch some of a pop's boost too, falling off with
@@ -314,36 +314,51 @@ def start_rainbow(interval: float = 0.03, step: float = 0.015) -> None:
             if _strip is not None:
                 count = _strip.numPixels()
                 now = time.monotonic()
-                # Prune expired pops and total up each pixel's boost from
-                # whatever's left -- see trigger_splash().
+                # Prune expired pops and total up each pixel's boost --
+                # and, since different trigger_splash() calls can pass
+                # different colors, each pixel's pop-weighted average
+                # color too -- from whatever's left. See trigger_splash().
                 _splash_pops[:] = [p for p in _splash_pops if now - p[1] < p[2]]
                 pop_boost = [0.0] * count
-                for pixel, spawn_time, lifetime in _splash_pops:
+                pop_r = [0.0] * count
+                pop_g = [0.0] * count
+                pop_b = [0.0] * count
+                for pixel, spawn_time, lifetime, color in _splash_pops:
                     intensity = _SPLASH_POP_BOOST * (
                         1.0 - (now - spawn_time) / lifetime
                     )
                     for delta in range(-_SPLASH_POP_RADIUS, _SPLASH_POP_RADIUS + 1):
                         falloff = 1.0 - abs(delta) / (_SPLASH_POP_RADIUS + 1)
-                        pop_boost[(pixel + delta) % count] += intensity * falloff
+                        idx = (pixel + delta) % count
+                        contribution = intensity * falloff
+                        pop_boost[idx] += contribution
+                        pop_r[idx] += color.r * contribution
+                        pop_g[idx] += color.g * contribution
+                        pop_b[idx] += color.b * contribution
                 for i in range(count):
                     hue = (offset + i / count) % 1.0
                     r, g, b = colorsys.hsv_to_rgb(hue, 1.0, _RAINBOW_VALUE)
                     r, g, b = r * 255, g * 255, b * 255
-                    # A pop blends this pixel toward white rather than
-                    # scaling its existing hue up -- scaling only brightens
-                    # channels that are already non-zero, which barely
-                    # registers against an already-saturated rainbow (a
-                    # pure hue has a channel sitting at 0 that scaling
-                    # can't touch). Blending toward white lifts every
-                    # channel, including that one, the same technique
+                    # A pop blends this pixel toward its own color rather
+                    # than scaling its existing hue up -- scaling only
+                    # brightens channels that are already non-zero, which
+                    # barely registers against an already-saturated
+                    # rainbow (a pure hue has a channel sitting at 0 that
+                    # scaling can't touch). Blending lifts every channel,
+                    # including that one, the same technique
                     # victory_swirl() uses for its unmistakable SPARKLE
-                    # flecks -- a fresh, centered pop reaches full white at
-                    # its peak, fading back to the rainbow's own hue as it
-                    # ages or as distance from its center grows.
+                    # flecks -- a fresh, centered pop reaches its full
+                    # target color at its peak, fading back to the
+                    # rainbow's own hue as it ages or as distance from its
+                    # center grows.
                     blend = min(1.0, pop_boost[i] / _SPLASH_POP_BOOST)
-                    r = r + (255.0 - r) * blend
-                    g = g + (255.0 - g) * blend
-                    b = b + (255.0 - b) * blend
+                    if pop_boost[i] > 0.0:
+                        target_r = pop_r[i] / pop_boost[i]
+                        target_g = pop_g[i] / pop_boost[i]
+                        target_b = pop_b[i] / pop_boost[i]
+                        r = r + (target_r - r) * blend
+                        g = g + (target_g - g) * blend
+                        b = b + (target_b - b) * blend
                     _strip.setPixelColor(i, Color(round(r), round(g), round(b)))
                 _strip.show()
             offset = (offset + step) % 1.0
@@ -367,12 +382,14 @@ def stop_rainbow() -> None:
     leds_off()
 
 
-def trigger_splash() -> None:
+def trigger_splash(color: RGB = SPARKLE) -> None:
     """Arm a burst of transient brightness pops, composited directly into
     whatever start_rainbow() is already painting -- for trivia_game.py's
-    answer-submission cue. Non-blocking: just records the pops; the
-    rainbow thread (see start_rainbow()) renders them on its own next tick
-    and prunes them once their lifetime's up.
+    answer-submission cue, white by default, or game_bridge.py's
+    ingredient-deposit cue, colored to match whatever was dropped in.
+    Non-blocking: just records the pops; the rainbow thread (see
+    start_rainbow()) renders them on its own next tick and prunes them
+    once their lifetime's up.
 
     An overlay rather than a takeover, so the rainbow never has to stop
     for it. Each pop gets its own randomized lifetime so they don't all
@@ -385,7 +402,7 @@ def trigger_splash() -> None:
     count = _strip.numPixels()
     now = time.monotonic()
     _splash_pops.extend(
-        (random.randrange(count), now, random.uniform(0.35, 0.7))
+        (random.randrange(count), now, random.uniform(0.35, 0.7), color)
         for _ in range(_SPLASH_POP_COUNT)
     )
 

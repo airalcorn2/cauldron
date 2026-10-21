@@ -85,6 +85,14 @@ class WitchProfile:
     potion_stir: str
     potion_rainbow: str
     potion_comet: str
+    # Hand-written lines for the Hex Hollow Godot game's real-cauldron
+    # bridge (see game_bridge.py): one announcement per ingredient, keyed
+    # by that game's own ingredient id ("mushroom", "pumpkin", "skull",
+    # "feather", "essence", "moonflower"), plus one victory incantation
+    # spoken once all six have been deposited. Also cached, never
+    # generated live -- same reasoning as potion_ingredients above.
+    hollow_ingredients: dict[str, str]
+    hollow_victory: str
     use_speaker_boost: bool = True
     # Per-witch playback volume, since some voices render quieter than others
     # at the same ElevenLabs settings. Not capped at 1.0 -- audio.py applies
@@ -171,6 +179,18 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Ahh, give it a stir!",
         potion_rainbow="Ahh, a rainbow of colors!",
         potion_comet="Ahh, a comet streaks through, wiping the slate clean!",
+        hollow_ingredients={
+            "mushroom": "Ahh, the mooncap mushroom takes the brew!",
+            "pumpkin": "Ahh, the ember pumpkin catches flame within!",
+            "skull": "Ahh, the old hollow skull sinks into the depths!",
+            "feather": "Ahh, the raven feather settles upon the surface!",
+            "essence": "Ahh, the ghost essence dissolves into the brew!",
+            "moonflower": "Ahh, the moonflower blooms within the cauldron!",
+        },
+        hollow_victory=(
+            "By mushroom, pumpkin, skull, feather, essence, and moonflower -- "
+            "the spell is bound, and the hollow sings!"
+        ),
         volume=0.65,
     ),
     Witch.AMBER: WitchProfile(
@@ -240,6 +260,18 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Ooh, stir it up!",
         potion_rainbow="Ooh, a whole rainbow!",
         potion_comet="Ooh, a comet! Watch it clean house!",
+        hollow_ingredients={
+            "mushroom": "Ooh, the mooncap mushroom's in!",
+            "pumpkin": "Ooh, the ember pumpkin's sizzling in there!",
+            "skull": "Ooh, the old hollow skull just went under!",
+            "feather": "Ooh, the raven feather's floating on top!",
+            "essence": "Ooh, the ghost essence just vanished right in!",
+            "moonflower": "Ooh, the moonflower's blooming in the brew!",
+        },
+        hollow_victory=(
+            "Mushroom, pumpkin, skull, feather, essence, moonflower -- that's "
+            "the whole set! Spell's done, let's go!"
+        ),
         volume=0.65,
     ),
     Witch.HAZEL: WitchProfile(
@@ -310,6 +342,18 @@ WITCHES: dict[Witch, WitchProfile] = {
         potion_stir="Stirring. Fine.",
         potion_rainbow="A rainbow. Fine, showy.",
         potion_comet="A comet. Hmph, clearing the mess.",
+        hollow_ingredients={
+            "mushroom": "The mooncap mushroom. In it goes. Hmph.",
+            "pumpkin": "The ember pumpkin. Hmph, still smoking.",
+            "skull": "The old hollow skull. Fitting, that.",
+            "feather": "The raven feather. Hmph, light as nothing.",
+            "essence": "The ghost essence. Gone, just like that. Hmph.",
+            "moonflower": "The moonflower. Hmph. Pretty, I suppose.",
+        },
+        hollow_victory=(
+            "Mushroom, pumpkin, skull, feather, essence, moonflower. Hmph. "
+            "The spell holds. Don't get used to it."
+        ),
         # Renders quieter than Violet/Amber at the same settings.
         volume=1.5,
     ),

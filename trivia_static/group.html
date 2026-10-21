@@ -253,11 +253,35 @@ ws.onmessage = (event) => {
     resultEl.textContent = "";
     resultEl.className = "";
     stopTimer();  // The clock hasn't started yet -- the clue is still being read.
+  } else if (data.type === "tiebreaker") {
+    // Sudden death -- both teams answer the same question at once, so
+    // there's no "whose turn" line here, just the shared question.
+    introEl.hidden = true;
+    liveEl.hidden = false;
+    roundEl.textContent = "SUDDEN DEATH";
+    categoryEl.textContent = "🎃 CLOSEST GUESS WINS";
+    clueEl.textContent = data.question;
+    turnEl.textContent = "Tied game! Both teams are guessing now.";
+    resultEl.textContent = "";
+    resultEl.className = "";
+    document.getElementById("score1-card").classList.remove("active");
+    document.getElementById("score2-card").classList.remove("active");
+    stopTimer();
   } else if (data.type === "timer") {
     startTimer(data.deadline);
   } else if (data.type === "result") {
     resultEl.textContent = `${data.correct ? "✓" : "✗"} ${data.banter}`;
     resultEl.className = data.correct ? "correct" : "wrong";
+    stopTimer();
+  } else if (data.type === "tiebreaker_result") {
+    const g1 = data.guess_1 ?? "no guess";
+    const g2 = data.guess_2 ?? "no guess";
+    resultEl.textContent =
+      `The real answer: ${data.answer} (${data.source}) -- ` +
+      `${teamNames["1"]} guessed ${g1}, ${teamNames["2"]} guessed ${g2}. ` +
+      `${teamNames[data.winner]} wins!`;
+    resultEl.className = "correct";
+    document.getElementById(`score${data.winner}-card`).classList.add("active");
     stopTimer();
   } else if (data.type === "end") {
     liveEl.hidden = true;
