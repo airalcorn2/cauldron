@@ -102,7 +102,7 @@ A standalone HTTP bridge for Hex Hollow, a separate Godot game (a top-down witch
 Run `.venv/bin/python game_bridge.py` instead of `cauldron_controller.py` — both want the same LED ring and audio hardware, so this replaces the live show for as long as the game's being played, the same way `trivia_game.py` does.
 It prints the address to enter into the game's own `CauldronBridge.BASE_URL` setting.
 Idle, the ring bubbles under a chasing rainbow, same as the main show's own idle look.
-Dropping an ingredient into the game's cauldron splashes and flashes the ring in that ingredient's color while a random witch names it, without interrupting the idle rainbow underneath; finishing the spell has a witch announce it, then all three witches recite a fixed victory spell in turn before a victory swirl.
+Dropping an ingredient into the game's cauldron briefly takes the ring over with a solid flash in that ingredient's color while a random witch names it, then returns to the idle rainbow; finishing the spell has a witch announce it, then all three witches recite a fixed victory spell in turn before a victory swirl.
 See `game_bridge.py` for the exact routes.
 
 ## Software Layout
