@@ -98,7 +98,9 @@ See `trivia_game.py` for the exact rules and [docs/trivia.md](docs/trivia.md) fo
 
 ## Hex Hollow Bridge
 
-A standalone HTTP bridge for Hex Hollow, a separate Godot game (a top-down witch-and-cauldron ingredient hunt) played on its own device on the same LAN rather than through this project's gamepad.
+![Hex Hollow title screen](hex-hollow-cover.png)
+
+A standalone HTTP bridge for [Hex Hollow](https://hexhollow-mnedueb6.manus.game) ([source](https://github.com/airalcorn2/hex-hollow)), a separate Godot game (a top-down witch-and-cauldron ingredient hunt) played on its own device on the same LAN rather than through this project's gamepad.
 Run `.venv/bin/python game_bridge.py` instead of `cauldron_controller.py` — both want the same LED ring and audio hardware, so this replaces the live show for as long as the game's being played, the same way `trivia_game.py` does.
 It prints the address to enter into the game's own `CauldronBridge.BASE_URL` setting.
 Idle, the ring bubbles under a chasing rainbow, same as the main show's own idle look.

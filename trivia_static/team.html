@@ -57,6 +57,8 @@
   .score.team2 { background: rgba(150,30,220,0.18); border: 2px solid var(--team2); }
   .score .n { font-size: 2.2rem; display: block; }
   #status { color: var(--muted); margin-top: 1rem; min-height: 1.4em; }
+  #finale { color: var(--muted); margin-top: 0.8rem; line-height: 1.6; }
+  #finale div { margin-bottom: 0.4rem; }
   #category { font-size: 0.85rem; letter-spacing: 0.05em; color: var(--muted); text-transform: uppercase; }
   #clue { font-size: 1.15rem; margin: 0.4rem 0 1rem; }
   textarea {
@@ -100,6 +102,7 @@
     <div class="score team2"><span class="n" id="score2">0</span><span id="score2-name">Team 2</span></div>
   </div>
   <div id="status">Connecting...</div>
+  <div id="finale" hidden></div>
   <div id="prompt" hidden>
     <div id="category"></div>
     <div id="clue"></div>
@@ -149,7 +152,7 @@ if (!myTeam) {
       document.getElementById("score2").textContent = data.scores["2"];
     } else if (data.type === "prompt") {
       promptEl.hidden = false;
-      categoryEl.textContent = data.category;
+      categoryEl.textContent = `${data.category}  ·  Question ${data.question_number}/${data.total_questions}`;
       clueEl.textContent = data.clue;
       answerEl.value = "";
       answerEl.placeholder = "Just the answer -- no need to phrase it as a question.";
@@ -179,6 +182,15 @@ if (!myTeam) {
       } else {
         statusEl.textContent = "A teammate already answered for this one.";
       }
+    } else if (data.type === "submitted") {
+      // Only the OTHER team's phones need this -- a submitting team's
+      // own page already got the more specific "ack" message above,
+      // including its own input getting disabled.
+      if (data.team !== myTeam) {
+        statusEl.textContent = data.stop_timer
+          ? `${teamNames[data.team]} locked in an answer -- the witches are judging...`
+          : `${teamNames[data.team]} locked in a guess...`;
+      }
     } else if (data.type === "result") {
       answerEl.disabled = true;
       submitEl.disabled = true;
@@ -195,6 +207,17 @@ if (!myTeam) {
     } else if (data.type === "end") {
       promptEl.hidden = true;
       statusEl.textContent = `Game over! ${teamNames[data.winner]} wins!`;
+    } else if (data.type === "finale") {
+      const finaleEl = document.getElementById("finale");
+      finaleEl.hidden = false;
+      finaleEl.innerHTML = "";
+      for (const name of ["violet", "amber", "hazel"]) {
+        const line = data.lines[name];
+        if (!line) continue;
+        const row = document.createElement("div");
+        row.textContent = line;
+        finaleEl.appendChild(row);
+      }
     }
   };
 

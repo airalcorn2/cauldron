@@ -77,6 +77,9 @@ A few entries (franchise film counts, the 2023 Halloween-spending figure) are sc
 The real answer and its source are revealed either way, so the room can see it wasn't made up.
 If neither guess parses as a number, or both land exactly as close (vanishingly unlikely), the winner's a genuine coin flip rather than defaulting to Team 1.
 
+Once a winner's decided, the game doesn't just end on a scoreboard -- all three witches each deliver a short closing line, together recapping how that specific game actually went (the final score, a category someone dominated, whether a steal or the tiebreaker settled it, and so on).
+These are written live by Gemini per round (see `generate_finale()`), not hand-written, since what they reference is different every time; the group screen and team pages both show the text as each witch speaks it.
+
 ## Troubleshooting
 
 - **"not found -- run trivia_data.py once first"**: exactly what it says — the prep step above hasn't been run yet, or `trivia/horror_clues.json` got deleted.

@@ -127,6 +127,14 @@
   /* Game-over screen */
   #gameover { font-size: 3vw; }
   #gameover .winner { font-size: 5vw; margin: 1rem 0; }
+  #finale {
+    font-size: 1.3vw;
+    color: var(--muted);
+    max-width: 65vw;
+    margin: 1.5rem auto 0;
+    line-height: 1.7;
+  }
+  #finale div { margin-bottom: 0.4rem; }
 </style>
 </head>
 <body>
@@ -169,6 +177,7 @@
 <div id="gameover" hidden>
   <div>🏆 Game Over 🏆</div>
   <div class="winner" id="winner-name"></div>
+  <div id="finale" hidden></div>
 </div>
 
 <script>
@@ -244,7 +253,7 @@ ws.onmessage = (event) => {
   } else if (data.type === "prompt") {
     introEl.hidden = true;
     liveEl.hidden = false;
-    roundEl.textContent = `Round ${data.round}`;
+    roundEl.textContent = `Round ${data.round}  ·  Question ${data.question_number}/${data.total_questions}`;
     categoryEl.textContent = data.category;
     clueEl.textContent = data.clue;
     turnEl.textContent = data.phase === "steal"
@@ -269,6 +278,15 @@ ws.onmessage = (event) => {
     stopTimer();
   } else if (data.type === "timer") {
     startTimer(data.deadline);
+  } else if (data.type === "submitted") {
+    if (data.stop_timer) {
+      stopTimer();
+      turnEl.textContent = `✓ ${teamNames[data.team]}'s answer is locked in -- the witches are judging...`;
+    } else {
+      // Sudden death: both teams share one clock, so the other team
+      // might still be deciding -- don't stop it, just note who's in.
+      turnEl.textContent = `✓ ${teamNames[data.team]} has locked in a guess...`;
+    }
   } else if (data.type === "result") {
     resultEl.textContent = `${data.correct ? "✓" : "✗"} ${data.banter}`;
     resultEl.className = data.correct ? "correct" : "wrong";
@@ -288,6 +306,17 @@ ws.onmessage = (event) => {
     gameoverEl.hidden = false;
     stopTimer();
     document.getElementById("winner-name").textContent = `${teamNames[data.winner]} wins!`;
+  } else if (data.type === "finale") {
+    const finaleEl = document.getElementById("finale");
+    finaleEl.hidden = false;
+    finaleEl.innerHTML = "";
+    for (const name of ["violet", "amber", "hazel"]) {
+      const line = data.lines[name];
+      if (!line) continue;
+      const row = document.createElement("div");
+      row.textContent = line;
+      finaleEl.appendChild(row);
+    }
   }
 };
 </script>

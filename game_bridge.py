@@ -4,9 +4,25 @@ this physical cauldron: idle, it just bubbles under a chasing rainbow,
 same as the main show's own idle look. Dropping an ingredient in splashes
 and flashes the ring in that ingredient's color while a witch names it.
 Finishing the spell announces success, then has all three witches recite
-a fixed victory spell in turn before a victory swirl. See
-hex-hollow/autoload/cauldron_bridge.gd for the game-side caller, which
-POSTs to the two routes below.
+a fixed victory spell in turn before a victory swirl.
+
+Talking to one of the three decorative companion witches in-game, or
+inspecting an environmental landmark (a gravestone, a lantern, the
+wishing well in the corn maze, etc.), has the matching real witch read
+that exact line for real too -- see HOLLOW_COMPANION_LINES and
+HOLLOW_LANDMARKS. The corn maze (Hex Hollow's second area) gets the same
+real-world treatment as the main hollow: a splash/flash per treat
+collected, and a witch cheer plus a swirl on its own completion.
+
+Generic UI nudges ("satchel full," "look for ingredients," and the like)
+deliberately do NOT get a real-world reading -- they fire constantly just
+from wandering around, and voicing every one would make the physical
+prop talk nonstop. Only the discrete, intentional interactions (an
+ingredient/treat landing in the satchel, a witch or landmark spoken to,
+a spell completed) trigger a reaction here.
+
+See hex-hollow/autoload/cauldron_bridge.gd for the game-side caller,
+which POSTs to the routes below.
 
 Standalone, like trivia_game.py -- run this INSTEAD of
 cauldron_controller.py's live show, not alongside it; both want the same
@@ -63,6 +79,145 @@ VICTORY_SPELL: dict[Witch, str] = {
     Witch.HAZEL: "So mote it be. Go on, then. Enjoy your little boom.",
 }
 
+# Warm harvest tone for the corn maze's treat splash -- distinct from any
+# single ingredient color since treats aren't tied to one.
+TREAT_COLOR = RGB(230, 160, 40)
+
+# Each companion witch in-game speaks her own hand-written lines (see
+# hollow_world.gd's COMPANION_DIALOGUE, which this must stay in sync
+# with) -- the real witch of the same name reads them for real, a direct
+# 1:1 mapping rather than a random pick.
+HOLLOW_COMPANION_LINES: dict[Witch, list[str]] = {
+    Witch.VIOLET: [
+        "Ahh, the moon is a silver spoon tonight, dear. Stir clockwise for luck.",
+        "A little stardust makes every spell more scholarly, you know.",
+        "Ahh, do mind the ghosts. They are terribly fond of interrupting a good ritual.",
+    ],
+    Witch.AMBER: [
+        "Ooh, drop something spooky in the pot. Give it some real attitude!",
+        "That cauldron's glowing again. Show-off.",
+        "Ooh, if it hisses at you, just smile like you meant for that to happen.",
+    ],
+    Witch.HAZEL: [
+        "Hmph. Keep your fingers out of the brew, child. It bites.",
+        "The old ways favor patience, proper shoes, and fewer explosions.",
+        "Mind the moonflower. It wilts when young witches hurry.",
+    ],
+}
+
+# Environmental landmark readings, reusing the exact text from each
+# landmark's own epitaphs/lines array in hollow_world.gd (area "hollow")
+# or corn_maze.gd (area "corn_maze") -- keyed (area, landmark id), since
+# landmark ids are only unique within one area, not across both. One
+# witch assigned per landmark (round robin, not random), so only that
+# one witch's voice needs caching per line rather than all three.
+HOLLOW_LANDMARKS: dict[tuple[str, str], tuple[Witch, list[str]]] = {
+    ("hollow", "gravestone_crooked"): (
+        Witch.VIOLET,
+        [
+            "Here lies Reginald. He chased a ghost. The ghost won.",
+            "He asked the moon for directions. It pointed down.",
+        ],
+    ),
+    ("hollow", "gravestone_mossy"): (
+        Witch.AMBER,
+        [
+            "Beloved Beatrice. She always said the grave was half full.",
+            "Rest in peace. Please leave the offerings where they are.",
+        ],
+    ),
+    ("hollow", "lantern"): (
+        Witch.HAZEL,
+        [
+            "The flame went out years ago. Its shadow still flickers.",
+            "Someone lit this lantern at midnight. Someone else answered.",
+        ],
+    ),
+    ("hollow", "oak"): (
+        Witch.VIOLET,
+        [
+            "The oak whispers your name, but only on the second listen.",
+            "A face is carved in the bark. It looks more awake than you do.",
+        ],
+    ),
+    ("hollow", "pond_sign"): (
+        Witch.AMBER,
+        [
+            "POND RULES: No feeding the fish. They remember faces.",
+            "The water is six inches deep. The reflection is much deeper.",
+        ],
+    ),
+    ("hollow", "pumpkin_winking"): (
+        Witch.HAZEL,
+        [
+            "This pumpkin has a heartbeat. It is trying to pretend it doesn't.",
+            "The grin is painted on. The blink was not.",
+        ],
+    ),
+    ("hollow", "pumpkin_smallest"): (
+        Witch.VIOLET,
+        [
+            "It is holding a secret. It refuses to share.",
+            "A tiny stem, a tiny curse, an enormous attitude.",
+        ],
+    ),
+    ("corn_maze", "well"): (
+        Witch.AMBER,
+        [
+            "Drop in a wish, not a witch. The last one clogged the bucket.",
+            "Your reflection winks first. How terribly impolite.",
+            "A voice below whispers: 'One penny for luck. Two for plausible deniability.'",
+        ],
+    ),
+    ("corn_maze", "tree"): (
+        Witch.HAZEL,
+        [
+            "The branches creak: 'I know every shortcut. I just enjoy watching you wander.'",
+            "The lantern flickers twice. A leaf lands on your hat like a tiny blessing.",
+            "'No broom parking,' says the tree. 'The squirrels have complained.'",
+        ],
+    ),
+    ("corn_maze", "wagon"): (
+        Witch.VIOLET,
+        [
+            "The delivery note reads: 'Three pumpkins, two curses. Handle with scare.'",
+            "One pumpkin rolls an inch toward you. You politely pretend not to notice.",
+            "The wheels turn without a breeze. Even the wagons go haunting after hours.",
+        ],
+    ),
+}
+
+# One announcement per witch per fall treat (see corn_maze.gd's
+# TREAT_DATA) -- same shape as WitchProfile.hollow_ingredients, just
+# kept local to this bridge rather than the shared witch registry, since
+# treats are a Hex Hollow-specific concept, not a core witch trait.
+HOLLOW_TREATS: dict[Witch, dict[str, str]] = {
+    Witch.VIOLET: {
+        "candy_apple": "Ahh, a candy apple, glossy as a spell gone right.",
+        "caramel_corn": "Ahh, caramel corn, sweet and terribly sticky magic.",
+        "candy_corn": "Ahh, candy corn, humble but devoted to tradition.",
+    },
+    Witch.AMBER: {
+        "candy_apple": "Ooh, a candy apple! Shiny and ready to cause problems.",
+        "caramel_corn": "Ooh, caramel corn! Don't even try to eat just one.",
+        "candy_corn": "Ooh, candy corn! Underrated, honestly.",
+    },
+    Witch.HAZEL: {
+        "candy_apple": "A candy apple. Hmph. Mind your teeth.",
+        "caramel_corn": "Caramel corn. Sticky business, that.",
+        "candy_corn": "Candy corn. Hmph. At least it doesn't melt.",
+    },
+}
+
+# A lighter-weight victory line for the corn maze's own completion -- one
+# random witch, not the full three-witch VICTORY_SPELL recitation, since
+# this is a secondary/bonus area rather than the main game's finale.
+MAZE_VICTORY: dict[Witch, str] = {
+    Witch.VIOLET: "Ahh, the harvest spell bubbles over at last. Well done, truly.",
+    Witch.AMBER: "Ooh, you did it! The corn maze bows to you.",
+    Witch.HAZEL: "Hmph. Not bad. The maze doesn't impress easily.",
+}
+
 
 def _ingredient_audio_path(witch: Witch, ingredient_id: str) -> Path:
     return CACHE_DIR / f"{witch}_{ingredient_id}.mp3"
@@ -74,6 +229,22 @@ def _victory_audio_path(witch: Witch) -> Path:
 
 def _spell_audio_path(witch: Witch) -> Path:
     return CACHE_DIR / f"{witch}_victory_spell.mp3"
+
+
+def _companion_audio_path(witch: Witch, line_index: int) -> Path:
+    return CACHE_DIR / f"{witch}_companion_{line_index}.mp3"
+
+
+def _landmark_audio_path(area: str, landmark_id: str, line_index: int) -> Path:
+    return CACHE_DIR / f"{area}_{landmark_id}_{line_index}.mp3"
+
+
+def _treat_audio_path(witch: Witch, treat_id: str) -> Path:
+    return CACHE_DIR / f"{witch}_{treat_id}.mp3"
+
+
+def _maze_victory_audio_path(witch: Witch) -> Path:
+    return CACHE_DIR / f"{witch}_maze_victory.mp3"
 
 
 def ensure_cache() -> None:
@@ -97,6 +268,22 @@ def ensure_cache() -> None:
         spell_path = _spell_audio_path(witch)
         if not spell_path.exists():
             missing.append((VICTORY_SPELL[witch], VOICES[witch], spell_path))
+        for line_index, line in enumerate(HOLLOW_COMPANION_LINES[witch]):
+            path = _companion_audio_path(witch, line_index)
+            if not path.exists():
+                missing.append((line, VOICES[witch], path))
+        for treat_id, text in HOLLOW_TREATS[witch].items():
+            path = _treat_audio_path(witch, treat_id)
+            if not path.exists():
+                missing.append((text, VOICES[witch], path))
+        maze_victory_path = _maze_victory_audio_path(witch)
+        if not maze_victory_path.exists():
+            missing.append((MAZE_VICTORY[witch], VOICES[witch], maze_victory_path))
+    for (area, landmark_id), (witch, lines) in HOLLOW_LANDMARKS.items():
+        for line_index, line in enumerate(lines):
+            path = _landmark_audio_path(area, landmark_id, line_index)
+            if not path.exists():
+                missing.append((line, VOICES[witch], path))
 
     if len(missing) == 0:
         return
@@ -184,6 +371,91 @@ async def _react_to_victory() -> None:
         await loop.run_in_executor(None, light_control.start_rainbow)
 
 
+async def _react_to_companion(witch_name: str, line_index: int) -> None:
+    """Speak one companion witch's own line -- a quieter moment than a
+    deposit, so it just plays over the idle rainbow/bubbling rather than
+    taking the ring over."""
+    try:
+        witch = Witch(witch_name.lower())
+    except ValueError:
+        return
+    lines = HOLLOW_COMPANION_LINES.get(witch)
+    if (lines is None) or not (0 <= line_index < len(lines)):
+        return
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _companion_audio_path(witch, line_index),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+
+
+async def _react_to_landmark(area: str, landmark_id: str, line_index: int) -> None:
+    """Speak one environmental landmark's reading, by whichever witch is
+    assigned to it (see HOLLOW_LANDMARKS) -- same quiet, lights-untouched
+    treatment as _react_to_companion()."""
+    entry = HOLLOW_LANDMARKS.get((area, landmark_id))
+    if entry is None:
+        return
+    witch, lines = entry
+    if not (0 <= line_index < len(lines)):
+        return
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _landmark_audio_path(area, landmark_id, line_index),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+
+
+async def _react_to_treat(treat_id: str) -> None:
+    """Same splash/flash/announce shape as _react_to_deposit() -- a
+    shared harvest-orange flash (TREAT_COLOR) rather than a per-treat
+    color, since the corn maze has no ingredient-color concept to match."""
+    witch = random.choice(list(Witch))
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(None, light_control.stop_rainbow)
+        splash_sound = loop.run_in_executor(
+            None, audio.play_file, audio.SPLASH_SFX_PATH
+        )
+        await loop.run_in_executor(None, light_control.celebrate, TREAT_COLOR)
+        await loop.run_in_executor(None, light_control.start_rainbow)
+        await splash_sound
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _treat_audio_path(witch, treat_id),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+
+
+async def _react_to_maze_victory() -> None:
+    """Lighter-weight than _react_to_victory() -- one random witch, one
+    line, then a swirl, since the corn maze is a secondary/bonus area
+    rather than the main game's finale."""
+    witch = random.choice(list(Witch))
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(None, light_control.stop_rainbow)
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _maze_victory_audio_path(witch),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+        await loop.run_in_executor(None, light_control.victory_swirl)
+        await loop.run_in_executor(None, light_control.start_rainbow)
+
+
 # asyncio only holds a weak reference to a task -- one with nothing else
 # referencing it can be garbage-collected mid-playback, cutting a witch
 # off partway through her line. _spawn() below keeps a strong reference
@@ -242,6 +514,59 @@ async def _handle_victory(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def _handle_companion(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    witch_name = payload.get("witch")
+    line_index = payload.get("line")
+    if not isinstance(witch_name, str) or not isinstance(line_index, int):
+        return web.json_response({"error": "invalid payload"}, status=400)
+    print(f"Received /companion: {witch_name} line {line_index}")
+    _spawn(_react_to_companion(witch_name, line_index))
+    return web.json_response({"ok": True})
+
+
+async def _handle_landmark(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    area = payload.get("area")
+    landmark_id = payload.get("landmark")
+    line_index = payload.get("line")
+    if (
+        not isinstance(area, str)
+        or not isinstance(landmark_id, str)
+        or not isinstance(line_index, int)
+    ):
+        return web.json_response({"error": "invalid payload"}, status=400)
+    print(f"Received /landmark: {area}/{landmark_id} line {line_index}")
+    _spawn(_react_to_landmark(area, landmark_id, line_index))
+    return web.json_response({"ok": True})
+
+
+async def _handle_treat(request: web.Request) -> web.Response:
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    treat_id = payload.get("treat")
+    if treat_id not in HOLLOW_TREATS[Witch.VIOLET]:
+        print(f"Received /treat with unknown treat: {treat_id!r}")
+        return web.json_response({"error": "unknown treat"}, status=400)
+    print(f"Received /treat: {treat_id}")
+    _spawn(_react_to_treat(treat_id))
+    return web.json_response({"ok": True})
+
+
+async def _handle_maze_victory(_request: web.Request) -> web.Response:
+    print("Received /maze_victory")
+    _spawn(_react_to_maze_victory())
+    return web.json_response({"ok": True})
+
+
 def _local_ip() -> str:
     """Best-effort guess at this machine's LAN-facing IP, for printing a
     typeable address at startup. See trivia_game._local_ip() -- duplicated
@@ -280,6 +605,10 @@ def main() -> None:
     app = web.Application()
     app.router.add_post("/deposit", _handle_deposit)
     app.router.add_post("/victory", _handle_victory)
+    app.router.add_post("/companion", _handle_companion)
+    app.router.add_post("/landmark", _handle_landmark)
+    app.router.add_post("/treat", _handle_treat)
+    app.router.add_post("/maze_victory", _handle_maze_victory)
 
     ip = _local_ip()
     print(f"Hex Hollow bridge listening on http://{ip}:{args.port}")

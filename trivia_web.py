@@ -82,6 +82,8 @@ class Server:
     _last_end: dict | None = None
     _last_tiebreaker: dict | None = None
     _last_tiebreaker_result: dict | None = None
+    _last_submitted: dict | None = None
+    _last_finale: dict | None = None
 
     async def _broadcast(self, message: dict) -> None:
         payload = json.dumps(message)
@@ -113,7 +115,13 @@ class Server:
         await self._broadcast(message)
 
     async def broadcast_prompt(
-        self, team: "TeamId", clue: "Clue", phase: "Phase"
+        self,
+        team: "TeamId",
+        clue: "Clue",
+        phase: "Phase",
+        *,
+        question_number: int,
+        total_questions: int,
     ) -> None:
         """Announce whose turn it is and what the clue was, now that the
         witch has finished reading it aloud -- also resets the
@@ -130,11 +138,30 @@ class Server:
             "clue": clue.clue,
             "points": clue.points,
             "round": clue.round,
+            "question_number": question_number,
+            "total_questions": total_questions,
         }
         self._last_prompt = message
-        # Both stale -- they were for the previous clue.
+        # All stale -- they were for the previous clue.
         self._last_timer = None
         self._last_result = None
+        self._last_submitted = None
+        await self._broadcast(message)
+
+    async def broadcast_submitted(self, team: "TeamId", *, stop_timer: bool) -> None:
+        """Announce that ``team`` has locked in an answer, the instant it
+        lands -- lets the group screen show a "locked in" indicator and
+        stop the countdown immediately, rather than leaving it visibly
+        ticking down through however long judging takes.
+
+        ``stop_timer`` is False during a sudden-death tiebreaker (see
+        trivia_game._play_tiebreaker()): both teams answer the same
+        clock there, so one team submitting doesn't mean the other is
+        done thinking -- only the per-team "locked in" indicator applies,
+        not the shared countdown.
+        """
+        message = {"type": "submitted", "team": team, "stop_timer": stop_timer}
+        self._last_submitted = message
         await self._broadcast(message)
 
     async def broadcast_timer(self, seconds: float) -> None:
@@ -163,6 +190,7 @@ class Server:
             "banter": banter,
         }
         self._last_result = message
+        self._last_submitted = None
         await self._broadcast(message)
 
     async def broadcast_end(self, state: "TriviaState", winner: "TeamId") -> None:
@@ -170,6 +198,20 @@ class Server:
         exhausted."""
         message = {"type": "end", "scores": state.team_scores, "winner": winner}
         self._last_end = message
+        await self._broadcast(message)
+
+    async def broadcast_finale(self, lines: dict[str, str]) -> None:
+        """Reveal the three witches' closing lines (witch name -> text),
+        once generated -- its own broadcast fired after broadcast_end(),
+        so "Game Over!" appears immediately while
+        trivia_game.generate_finale()'s Gemini call and synthesis are
+        still running, rather than making the whole finale wait before
+        the screens update at all. Plain strings, not a domain type, so
+        this module stays free of a dependency on trivia_game.py's
+        Witch/FinaleLine types -- same reasoning as
+        broadcast_tiebreaker_result()'s plain float/str arguments."""
+        message = {"type": "finale", "lines": lines}
+        self._last_finale = message
         await self._broadcast(message)
 
     async def broadcast_tiebreaker(self, question: str) -> None:
@@ -189,6 +231,7 @@ class Server:
         self._last_timer = None
         self._last_result = None
         self._last_tiebreaker_result = None
+        self._last_submitted = None
         await self._broadcast(message)
 
     async def broadcast_tiebreaker_result(
@@ -211,6 +254,7 @@ class Server:
             "winner": winner,
         }
         self._last_tiebreaker_result = message
+        self._last_submitted = None
         await self._broadcast(message)
 
     async def _send_snapshot(self, ws: web.WebSocketResponse) -> None:
@@ -222,10 +266,12 @@ class Server:
             self._last_state,
             self._last_prompt,
             self._last_timer,
+            self._last_submitted,
             self._last_result,
             self._last_tiebreaker,
             self._last_tiebreaker_result,
             self._last_end,
+            self._last_finale,
         ):
             if message is not None:
                 await ws.send_str(json.dumps(message))

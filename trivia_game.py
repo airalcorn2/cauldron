@@ -360,6 +360,118 @@ async def judge_answer(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class FinaleLine:
+    """One witch's closing line -- clean text for display, plus an
+    Audio-Tag-annotated version for speech. See generate_finale()."""
+
+    text: str
+    spoken: str
+
+
+def _summarize_outcomes(state: TriviaState, winner: "TeamId") -> str:
+    """Boil state.outcomes down into a compact, factual recap for
+    _finale_prompt() to riff on -- not shown to anyone directly, just
+    context for Gemini."""
+    lines = [
+        f"Final score: {TEAM_NAMES[1]} {state.team_scores[1]}, "
+        f"{TEAM_NAMES[2]} {state.team_scores[2]}. {TEAM_NAMES[winner]} wins!"
+    ]
+    total = len(state.outcomes)
+    scored = sum(1 for o in state.outcomes if o.scorer is not None)
+    lines.append(
+        f"{scored} of {total} questions were answered correctly; "
+        f"{total - scored} stumped both teams."
+    )
+    steals = sum(1 for o in state.outcomes if o.stolen)
+    if steals:
+        lines.append(
+            f"{steals} of those were won on a steal after the other team "
+            "missed first."
+        )
+    for team in (1, 2):
+        categories = sorted(
+            {o.category for o in state.outcomes if o.scorer == team}
+        )
+        if categories:
+            lines.append(f"{TEAM_NAMES[team]} scored on: {', '.join(categories)}.")
+    return "\n".join(lines)
+
+
+def _finale_prompt(
+    *, state: TriviaState, winner: "TeamId", tiebreaker_note: str
+) -> str:
+    summary = _summarize_outcomes(state, winner)
+    return f"""
+Three eerie, theatrical Halloween witches -- Violet (whimsical and
+academic), Amber (youthful and sassy), and Hazel (old and crotchety) --
+have just finished hosting a horror trivia game from a magic cauldron for
+two mortal teams, {TEAM_NAMES[1]} and {TEAM_NAMES[2]}.
+
+{summary}
+{tiebreaker_note}
+
+Write one short, congratulatory closing line for EACH witch, in her own
+voice, together forming a little closing ceremony for the whole game --
+not three generic "good game" lines, but together referencing specific,
+different details from the summary above (the final score, the winning
+team by name, a category someone did well in, whether a steal or the
+tiebreaker decided it, etc.) so it is clear they actually watched the
+whole thing. Keep each witch's personality as distinct and consistent as
+the judging banter she would give mid game. Avoid em dashes or en dashes;
+use commas or periods instead, since text-to-speech reads dashes
+awkwardly.
+
+Also write a second version of each line for text-to-speech: identical
+wording, but with ElevenLabs "Audio Tags" inserted -- bracketed delivery
+directions like [excited], [cackles], [stress on next word], [dramatic
+pause] -- at whatever points would make it land better spoken aloud. Do
+not change, add, remove, or reorder a single word; only insert bracketed
+tags between words.
+
+Return ONLY a valid JSON object in this exact format, with no extra text:
+{{"violet": {{"text": "...", "spoken": "...with tags..."}}, "amber": {{"text": "...", "spoken": "..."}}, "hazel": {{"text": "...", "spoken": "..."}}}}
+"""
+
+
+async def generate_finale(
+    state: TriviaState, winner: "TeamId", tiebreaker_note: str = ""
+) -> dict[Witch, FinaleLine]:
+    """Ask Gemini to write all three witches' closing lines together, in
+    one call, referencing how this specific game actually went -- unlike
+    judge_answer()'s per-attempt banter, this needs to see the whole
+    round's shape at once so the three lines complement each other
+    instead of repeating the same "good game" sentiment three times.
+
+    Content is different every round (depends on what was actually
+    asked/answered), so like judge_answer()'s banter this is generated
+    live rather than pre-cached -- consistent with trivia already being
+    the one mode in this project that needs network access during play.
+    """
+    prompt = _finale_prompt(state=state, winner=winner, tiebreaker_note=tiebreaker_note)
+    response = await _GEMINI_CLIENT.aio.models.generate_content(
+        model=_GEMINI_MODEL, contents=prompt, config=_JUDGE_CONFIG
+    )
+    if response.text is None:
+        raise ValueError("Gemini returned no text for trivia finale")
+    print(f"[gemini:finale] {response.text}", file=sys.stderr)
+    raw = json.loads(response.text)
+    lines: dict[Witch, FinaleLine] = {}
+    for witch in Witch:
+        entry = raw[str(witch)]
+        text = str(entry["text"])
+        spoken = str(entry.get("spoken", text))
+        # Same fidelity guard as judge_answer()'s banter.
+        if _normalized(_strip_tags(spoken)) != _normalized(text):
+            spoken = text
+        lines[witch] = FinaleLine(text=text, spoken=spoken)
+    return lines
+
+
+def _finale_audio_path(witch: Witch) -> Path:
+    return AUDIO_CACHE_DIR / f"_finale_{witch}.mp3"
+
+
 async def _speak_warning(
     loop: asyncio.AbstractEventLoop, witch: Witch, answerer: TeamId
 ) -> None:
@@ -422,6 +534,18 @@ def closest_team(
     return 1 if distance_1 < distance_2 else 2
 
 
+@dataclass(frozen=True, slots=True)
+class ClueOutcome:
+    """One fully-resolved clue, logged by submit_answer() for the
+    end-of-round finale summary -- see generate_finale(). Not used for
+    scoring itself, which team_scores already handles directly."""
+
+    category: str
+    points: int
+    scorer: TeamId | None  # None if nobody got it right.
+    stolen: bool  # True if scorer won it on a steal attempt, not primary.
+
+
 @dataclass
 class TriviaState:
     """The round's full state. Mutated via submit_answer()/start_clue(),
@@ -436,6 +560,13 @@ class TriviaState:
     active_clue: Clue | None = None
     remaining: list[Clue] = field(default_factory=list)
     asked: list[Clue] = field(default_factory=list)
+    outcomes: list[ClueOutcome] = field(default_factory=list)
+    # Set once at construction (see run()) -- the main pool's size, for
+    # the group/team screens' "question N of total_clues" display.
+    # len(asked) + 1 is the active clue's own position in that count
+    # (steal re-attempts don't advance it -- asked only grows once a
+    # clue is fully resolved, see submit_answer()).
+    total_clues: int = 0
 
 
 def current_answerer(state: TriviaState) -> TeamId:
@@ -474,13 +605,21 @@ def submit_answer(state: TriviaState, correct: bool) -> TriviaState:
         return dataclasses.replace(state, phase="steal")
 
     scores = state.team_scores
+    scorer: TeamId | None = None
     if correct:
         scorer = current_answerer(state)
         scores = {**scores, scorer: scores[scorer] + state.active_clue.points}
+    outcome = ClueOutcome(
+        category=state.active_clue.category,
+        points=state.active_clue.points,
+        scorer=scorer,
+        stolen=(scorer is not None) and (state.phase == "steal"),
+    )
     return dataclasses.replace(
         state,
         team_scores=scores,
         asked=[*state.asked, state.active_clue],
+        outcomes=[*state.outcomes, outcome],
         active_clue=None,
         current_team=other_team(state.current_team),
         phase="primary",
@@ -531,7 +670,7 @@ async def run(*, host: str = "0.0.0.0", port: int = 8080) -> TriviaState:
     # 1-point clues to the 2-point ones, Jeopardy!-board style, rather
     # than mixing point values throughout.
     clues.sort(key=lambda clue: clue.points)
-    state = TriviaState(remaining=clues)
+    state = TriviaState(remaining=clues, total_clues=len(clues))
 
     loop = asyncio.get_running_loop()
     server = await trivia_web.start(
@@ -588,14 +727,59 @@ async def run(*, host: str = "0.0.0.0", port: int = 8080) -> TriviaState:
             if state.active_clue is None:
                 state = start_clue(state)
 
+        tiebreaker_note = ""
         if state.team_scores[1] == state.team_scores[2]:
             question = random.choice(TIEBREAKER_QUESTIONS)
             print(f"Scores tied -- sudden death: {question.question}")
             winner: TeamId = await _play_tiebreaker(server, loop, question)
+            tiebreaker_note = (
+                "The game was tied, so it came down to a sudden-death "
+                f'question: "{question.question}" The correct answer was '
+                f"{question.answer}."
+            )
         else:
             winner = 1 if state.team_scores[1] > state.team_scores[2] else 2
         await server.broadcast_state(state)
         await server.broadcast_end(state, winner)
+
+        # A little closing ceremony -- all three witches, in turn, each
+        # with her own color, referencing how this specific game actually
+        # went (see generate_finale()). Everything is generated up front
+        # -- the Gemini finale-text call, then all three witches' TTS
+        # (sequential, not gathered: ElevenLabs' concurrent-request limit
+        # rejects a burst, same reasoning as ensure_line_cache()) -- with
+        # the idle rainbow and witch laugh filling what would otherwise
+        # be a long silent dark gap, same "something's happening" cue
+        # _play_attempt() uses for its own Gemini/TTS wait. Nothing plays
+        # until all three lines are ready, so the recitation itself runs
+        # with no further waits once it starts.
+        await loop.run_in_executor(None, light_control.start_rainbow)
+        await loop.run_in_executor(None, audio.start_laugh)
+        finale = await generate_finale(state, winner, tiebreaker_note)
+        finale_paths: dict[Witch, Path] = {}
+        for witch in Witch:
+            path = _finale_audio_path(witch)
+            await generate_to_path(finale[witch].spoken, VOICES[witch], path)
+            finale_paths[witch] = path
+        await loop.run_in_executor(None, audio.stop_laugh)
+        await loop.run_in_executor(None, light_control.stop_rainbow)
+
+        # Only now, with every line actually ready to play, do the
+        # screens get to see the text -- showing it earlier (right after
+        # generate_finale()'s Gemini call) would spoil it well before any
+        # witch has actually said a word.
+        await server.broadcast_finale({str(w): finale[w].text for w in Witch})
+        for witch in Witch:
+            await loop.run_in_executor(
+                None, light_control.set_leds, light_control.WITCH_COLORS[witch]
+            )
+            await loop.run_in_executor(
+                None,
+                audio.play_file,
+                finale_paths[witch],
+                True,
+                audio.WITCH_VOLUMES[witch],
+            )
         await loop.run_in_executor(
             None, light_control.victory_swirl, TEAM_COLORS[winner]
         )
@@ -634,8 +818,17 @@ async def _play_attempt(
     await server.broadcast_state(state, answering_team=answerer)
     # Show the clue on the group screen as soon as the witch starts
     # reading it, not once she's done -- broadcast_prompt() before
-    # the (blocking) audio playback, not after.
-    await server.broadcast_prompt(answerer, clue, state.phase)
+    # the (blocking) audio playback, not after. len(state.asked) + 1 is
+    # this clue's own position in the round -- a steal re-attempt on the
+    # same clue doesn't advance it (asked only grows once a clue is
+    # fully resolved, see submit_answer()).
+    await server.broadcast_prompt(
+        answerer,
+        clue,
+        state.phase,
+        question_number=len(state.asked) + 1,
+        total_questions=state.total_clues,
+    )
     # Idle rainbow starts here, before the witch even starts
     # talking, and keeps spinning straight through both the
     # reading and the answer wait below -- the room's attention is
@@ -693,14 +886,18 @@ async def _play_attempt(
             pass
 
     if response is not None:
-        # A submission actually landed (as opposed to the clock
-        # running out) -- a quick splash of sound and light marking
-        # the moment, distinct from the eventual correct/incorrect
-        # outcome below (not known yet -- judge_answer() hasn't
-        # run). trigger_splash() composites a burst of brightness
-        # pops directly into the still-spinning rainbow (same
-        # technique potion_play.py uses for its heat bubbles)
-        # rather than taking the ring over -- no stop/restart
+        # A submission actually landed (as opposed to the clock running
+        # out) -- stop the group screen's countdown immediately instead
+        # of leaving it visibly ticking through however long judging
+        # takes, and show a "locked in" indicator there (and on the
+        # other team's phone) in its place.
+        await server.broadcast_submitted(answerer, stop_timer=True)
+        # A quick splash of sound and light marking the moment, distinct
+        # from the eventual correct/incorrect outcome below (not known
+        # yet -- judge_answer() hasn't run). trigger_splash() composites
+        # a burst of brightness pops directly into the still-spinning
+        # rainbow (same technique potion_play.py uses for its heat
+        # bubbles) rather than taking the ring over -- no stop/restart
         # dance, and no dark gap before the rainbow "resumes" (it
         # never stopped).
         light_control.trigger_splash()
@@ -811,6 +1008,10 @@ async def _play_tiebreaker(
             )
         except asyncio.TimeoutError:
             return None
+        # stop_timer=False -- both teams share this one clock, so one
+        # team locking in a guess doesn't mean the other is done
+        # thinking; only show the per-team indicator.
+        await server.broadcast_submitted(team, stop_timer=False)
         return extract_number(text)
 
     guess_1, guess_2 = await asyncio.gather(_wait(1), _wait(2))
