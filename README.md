@@ -4,6 +4,8 @@
 
 An interactive prop built on a Raspberry Pi.
 Drop some items into the cauldron and an IR beam break starts the sequence: the camera takes a photo, a vision model writes a three-line spell about what it sees, and three text-to-speech "witch" voices recite it with the LED ring set to each witch's color.
+A USB gamepad live-switches between that and five other photo-reactive [modes](#modes), plus two gamepad-only mini-games that skip the camera entirely.
+The same prop also hosts a phone-driven [trivia game](#trivia) for a crowd, and a [bridge](#hex-hollow-bridge) to a separate Halloween-themed Godot game, so ingredients collected and spells completed over there trigger real witch voices and lighting back here.
 See [Materials](docs/materials.md) for the full parts list.
 
 ## Table of Contents
