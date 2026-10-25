@@ -185,6 +185,152 @@ HOLLOW_LANDMARKS: dict[tuple[str, str], tuple[Witch, list[str]]] = {
             "The wheels turn without a breeze. Even the wagons go haunting after hours.",
         ],
     ),
+    # The Whispering Manor (Hex Hollow's third/final area) -- 18
+    # landmarks reusing manor_interactions.gd's exact text verbatim.
+    ("house", "portrait"): (
+        Witch.VIOLET,
+        [
+            "The lady in the frame sighs. 'Do straighten your hat. We have standards, even after death.'",
+            "Her eyes follow you. 'Of course I stare, dear. Nobody brings me a book.'",
+            "A painted hand points toward the foyer. 'Four keepsakes. One brew. Then kindly let us sleep.'",
+        ],
+    ),
+    ("house", "piano"): (
+        Witch.AMBER,
+        [
+            'One key plays by itself. The next note is a tiny, offended sneeze.',
+            "A ghostly pianist whispers: 'Requests cost a shilling. Complaints cost two.'",
+            'The sheet music is titled A Minor Inconvenience. Every note is a boo.',
+        ],
+    ),
+    ("house", "clock"): (
+        Witch.HAZEL,
+        [
+            "It strikes thirteen. A voice inside mutters: 'Daylight haunting time. Terrible business.'",
+            "The pendulum swings backward. 'You are not late,' says the clock. 'Yesterday is early.'",
+            'A little brass plaque reads: Winding optional. Existential dread included.',
+        ],
+    ),
+    ("house", "oven"): (
+        Witch.VIOLET,
+        [
+            "Something in the chimney asks for toast. 'Lightly frightened, please.'",
+            'The kettle whistles a funeral march, then apologizes. It meant to make tea.',
+            'A recipe card says: Add one pinch of salt. Do not add the cook. Again.',
+        ],
+    ),
+    ("house", "supper_table"): (
+        Witch.AMBER,
+        [
+            'The flowers look fresh, which is rude of them at this hour.',
+            'Four candles burn bravely; none recalls who set the table.',
+            'Dinner is late again. The ghosts blame the soup, naturally.',
+        ],
+    ),
+    ("house", "sideboard"): (
+        Witch.HAZEL,
+        [
+            'The crockery has survived three hauntings and one dreadful potluck.',
+            'Pumpkins on parade, each grinning like it knows the punchline.',
+            'A plate whispers that porcelain is simply crockery with ambitions.',
+        ],
+    ),
+    ("house", "mirror"): (
+        Witch.VIOLET,
+        [
+            'The oval shows a ghostly guest who insists she is your better side.',
+            'Its glow is flattering, though it makes every eyebrow look haunted.',
+            'A very pale reflection bows first. Good manners are not dead.',
+        ],
+    ),
+    ("house", "bookshelf"): (
+        Witch.AMBER,
+        [
+            'The forbidden books are shelved by danger, then alphabetically.',
+            "One dusty volume warns, 'Do not open.' How refreshingly clear.",
+            'Even the spines look nervous when the librarian is nearby.',
+        ],
+    ),
+    ("house", "writing_desk"): (
+        Witch.HAZEL,
+        [
+            'The abandoned notes end mid-sentence, then resume with better penmanship.',
+            "Someone wrote, 'Dear diary,' and immediately lost their nerve.",
+            'Ink stains gather like tiny ghosts with unfinished business.',
+        ],
+    ),
+    ("house", "globe"): (
+        Witch.VIOLET,
+        [
+            'The globe marks every place the manor has never been invited.',
+            'Its oceans look calm; the continents are plainly plotting something.',
+            'A careful spin reveals no country named Somewhere Sensible.',
+        ],
+    ),
+    ("house", "fireplace"): (
+        Witch.AMBER,
+        [
+            'The flames keep a warm little secret and refuse to share it.',
+            'Ash settles like gray snow, very cozy and slightly judgmental.',
+            'The hearth has heard every parlor tale and still wants one more.',
+        ],
+    ),
+    ("house", "armchair"): (
+        Witch.HAZEL,
+        [
+            'The green cushions sag as if someone invisible has just stood up.',
+            'Apparently empty, though the upholstery has excellent posture.',
+            'A chair this dignified must be hiding a very small aristocrat.',
+        ],
+    ),
+    ("house", "dollhouse"): (
+        Witch.VIOLET,
+        [
+            'The tiny house has a tiny foyer, for tiny guests with tiny secrets.',
+            'Every window is dark, which is sensible for a house this small.',
+            'The miniature parlor is tidier than ours. No one likes a show-off.',
+        ],
+    ),
+    ("house", "toy_chest"): (
+        Witch.AMBER,
+        [
+            'Toys spill out like a cheerful rebellion against sensible storage.',
+            'A wooden drum hides beneath the heap, pretending innocence.',
+            'The chest contains enough playthings to occupy one ghost for centuries.',
+        ],
+    ),
+    ("house", "rocking_horse"): (
+        Witch.HAZEL,
+        [
+            'The painted horse waits patiently for a rider with impeccable balance.',
+            'Its wooden smile says it has crossed stranger rooms than this.',
+            'A gallant steed, though its idea of galloping is gently rocking.',
+        ],
+    ),
+    ("house", "bed"): (
+        Witch.VIOLET,
+        [
+            'The plush rabbit keeps watch with the solemnity of a tiny guard.',
+            'The blankets are tucked in neatly; even nightmares must knock first.',
+            'A cozy bed, made for dreams and one very long-eared chaperone.',
+        ],
+    ),
+    ("house", "stag"): (
+        Witch.AMBER,
+        [
+            "The antlers crown the foyer like nature's most opinionated chandelier.",
+            'This noble stag has witnessed every entrance and judged most of them.',
+            'Dust rests on its brow, giving the old monarch a silver crown.',
+        ],
+    ),
+    ("house", "pantry"): (
+        Witch.HAZEL,
+        [
+            'The jars stand in ranks, each guarding a mystery with a label.',
+            'Crockery crowds the shelves like gossiping aunts at a village feast.',
+            'Some preserves are older than the house and considerably less chatty.',
+        ],
+    ),
 }
 
 # One announcement per witch per fall treat (see corn_maze.gd's
@@ -218,6 +364,45 @@ MAZE_VICTORY: dict[Witch, str] = {
     Witch.HAZEL: "Hmph. Not bad. The maze doesn't impress easily.",
 }
 
+# One announcement per witch per cursed keepsake (see haunted_house.gd's
+# ITEM_DATA) -- same shape as HOLLOW_TREATS.
+HOUSE_KEEPSAKES: dict[Witch, dict[str, str]] = {
+    Witch.VIOLET: {
+        "silver_key": "Ahh, a silver key. Every lock remembers its own name.",
+        "music_box": "Ahh, a music box. Wind it gently, it has waited so long to sing.",
+        "ghost_candle": "Ahh, a ghost candle. Its flame burns colder than the room.",
+        "velvet_ribbon": "Ahh, a velvet ribbon. Softness outlives even the manor's ghosts.",
+    },
+    Witch.AMBER: {
+        "silver_key": "Ooh, a silver key! Bet it opens something it really shouldn't.",
+        "music_box": "Ooh, a music box! Please don't wind it at midnight. Please.",
+        "ghost_candle": "Ooh, a ghost candle! That flame is doing its own thing.",
+        "velvet_ribbon": "Ooh, a velvet ribbon! Fancy, for a haunted house.",
+    },
+    Witch.HAZEL: {
+        "silver_key": "A silver key. Hmph. Mind what it unlocks.",
+        "music_box": "A music box. Hmph. Let it rest, this time.",
+        "ghost_candle": "A ghost candle. Don't blow it out. It won't like that.",
+        "velvet_ribbon": "A velvet ribbon. Hmph. At least it's tidy.",
+    },
+}
+
+# The Whispering Manor is the game's true ending (its own overlay says
+# "Happy Halloween!"), so its completion gets the same grand treatment as
+# the main hollow's own finale -- an announcement, then all three
+# witches recite a fixed spell in turn -- rather than the corn maze's
+# lighter one-witch MAZE_VICTORY.
+HOUSE_VICTORY: dict[Witch, str] = {
+    Witch.VIOLET: "Ahh, four keepsakes gathered, and the manor finally rests.",
+    Witch.AMBER: "Ooh, you actually did it! The whole house, done!",
+    Witch.HAZEL: "Hmph. The manor's quiet now. About time.",
+}
+HOUSE_VICTORY_SPELL: dict[Witch, str] = {
+    Witch.VIOLET: "By silver key and candle's light,",
+    Witch.AMBER: "the manor settles into the night.",
+    Witch.HAZEL: "So mote it be. Sleep well. Good riddance, and good night.",
+}
+
 
 def _ingredient_audio_path(witch: Witch, ingredient_id: str) -> Path:
     return CACHE_DIR / f"{witch}_{ingredient_id}.mp3"
@@ -245,6 +430,18 @@ def _treat_audio_path(witch: Witch, treat_id: str) -> Path:
 
 def _maze_victory_audio_path(witch: Witch) -> Path:
     return CACHE_DIR / f"{witch}_maze_victory.mp3"
+
+
+def _keepsake_audio_path(witch: Witch, keepsake_id: str) -> Path:
+    return CACHE_DIR / f"{witch}_{keepsake_id}.mp3"
+
+
+def _house_victory_audio_path(witch: Witch) -> Path:
+    return CACHE_DIR / f"{witch}_house_victory.mp3"
+
+
+def _house_spell_audio_path(witch: Witch) -> Path:
+    return CACHE_DIR / f"{witch}_house_victory_spell.mp3"
 
 
 def ensure_cache() -> None:
@@ -279,6 +476,16 @@ def ensure_cache() -> None:
         maze_victory_path = _maze_victory_audio_path(witch)
         if not maze_victory_path.exists():
             missing.append((MAZE_VICTORY[witch], VOICES[witch], maze_victory_path))
+        for keepsake_id, text in HOUSE_KEEPSAKES[witch].items():
+            path = _keepsake_audio_path(witch, keepsake_id)
+            if not path.exists():
+                missing.append((text, VOICES[witch], path))
+        house_victory_path = _house_victory_audio_path(witch)
+        if not house_victory_path.exists():
+            missing.append((HOUSE_VICTORY[witch], VOICES[witch], house_victory_path))
+        house_spell_path = _house_spell_audio_path(witch)
+        if not house_spell_path.exists():
+            missing.append((HOUSE_VICTORY_SPELL[witch], VOICES[witch], house_spell_path))
     for (area, landmark_id), (witch, lines) in HOLLOW_LANDMARKS.items():
         for line_index, line in enumerate(lines):
             path = _landmark_audio_path(area, landmark_id, line_index)
@@ -456,6 +663,59 @@ async def _react_to_maze_victory() -> None:
         await loop.run_in_executor(None, light_control.start_rainbow)
 
 
+async def _react_to_keepsake(keepsake_id: str) -> None:
+    """Same splash/flash/announce shape as _react_to_deposit()/
+    _react_to_treat() -- reuses TREAT_COLOR for the flash, since
+    keepsakes have no ingredient-color concept of their own either."""
+    witch = random.choice(list(Witch))
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(None, light_control.stop_rainbow)
+        splash_sound = loop.run_in_executor(
+            None, audio.play_file, audio.SPLASH_SFX_PATH
+        )
+        await loop.run_in_executor(None, light_control.celebrate, TREAT_COLOR)
+        await loop.run_in_executor(None, light_control.start_rainbow)
+        await splash_sound
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _keepsake_audio_path(witch, keepsake_id),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+
+
+async def _react_to_house_victory() -> None:
+    """The game's true ending -- same grand announce-then-recite-then-
+    swirl shape as _react_to_victory(), just with HOUSE_VICTORY/
+    HOUSE_VICTORY_SPELL's own lines."""
+    witch = random.choice(list(Witch))
+    loop = asyncio.get_running_loop()
+    async with _reaction_lock:
+        await loop.run_in_executor(
+            None,
+            audio.play_file,
+            _house_victory_audio_path(witch),
+            True,
+            audio.WITCH_VOLUMES[witch],
+        )
+        await loop.run_in_executor(None, light_control.stop_rainbow)
+        for spell_witch in Witch:
+            await loop.run_in_executor(
+                None, light_control.set_leds, light_control.WITCH_COLORS[spell_witch]
+            )
+            await loop.run_in_executor(
+                None,
+                audio.play_file,
+                _house_spell_audio_path(spell_witch),
+                True,
+                audio.WITCH_VOLUMES[spell_witch],
+            )
+        await loop.run_in_executor(None, light_control.victory_swirl)
+        await loop.run_in_executor(None, light_control.start_rainbow)
+
+
 # asyncio only holds a weak reference to a task -- one with nothing else
 # referencing it can be garbage-collected mid-playback, cutting a witch
 # off partway through her line. _spawn() below keeps a strong reference
@@ -567,6 +827,38 @@ async def _handle_maze_victory(_request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def _handle_house_event(request: web.Request) -> web.Response:
+    """The Whispering Manor (Hex Hollow's third area) uses a single
+    event-dispatch route rather than one route per interaction type --
+    see cauldron_bridge.gd's notify_house_event(). Mirrors the other
+    levels' reactions underneath; just a different wire shape in front
+    of them."""
+    try:
+        payload = await request.json()
+    except ValueError:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    event = payload.get("event")
+    print(f"Received /house_event: {event}")
+    if event == "pickup":
+        keepsake_id = payload.get("keepsake")
+        if keepsake_id not in HOUSE_KEEPSAKES[Witch.VIOLET]:
+            print(f"  unknown keepsake: {keepsake_id!r}")
+            return web.json_response({"error": "unknown keepsake"}, status=400)
+        _spawn(_react_to_keepsake(keepsake_id))
+    elif event == "victory":
+        _spawn(_react_to_house_victory())
+    elif event == "landmark":
+        landmark_id = payload.get("landmark")
+        line_index = payload.get("line")
+        if not isinstance(landmark_id, str) or not isinstance(line_index, int):
+            return web.json_response({"error": "invalid payload"}, status=400)
+        _spawn(_react_to_landmark("house", landmark_id, line_index))
+    else:
+        print(f"  unknown house event: {event!r}")
+        return web.json_response({"error": "unknown event"}, status=400)
+    return web.json_response({"ok": True})
+
+
 def _local_ip() -> str:
     """Best-effort guess at this machine's LAN-facing IP, for printing a
     typeable address at startup. See trivia_game._local_ip() -- duplicated
@@ -609,6 +901,7 @@ def main() -> None:
     app.router.add_post("/landmark", _handle_landmark)
     app.router.add_post("/treat", _handle_treat)
     app.router.add_post("/maze_victory", _handle_maze_victory)
+    app.router.add_post("/house_event", _handle_house_event)
 
     ip = _local_ip()
     print(f"Hex Hollow bridge listening on http://{ip}:{args.port}")
