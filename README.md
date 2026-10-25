@@ -93,11 +93,12 @@ All of the witches' mode-selection lines are hand-written and cached to disk ahe
 A two-team horror/Halloween trivia game, separate from everything above: it's phone-driven rather than gamepad-driven, so it isn't reachable through the gamepad's mode selection and doesn't need a beam break to start.
 Questions come from a [public Jeopardy! clue dataset](https://github.com/jwolle1/jeopardy_clue_dataset) (its own maintainer prefers not to credit where the clues were sourced from), filtered down to horror/Halloween-adjacent categories and voice-cached ahead of time by `trivia_data.py` — run that once before a party; it never runs during a live round.
 For a kid-friendly crowd, run `trivia_kids.py` instead — it generates original, trick-or-treat-appropriate Halloween/monster trivia with Gemini rather than filtering the Jeopardy dataset, and writes to the exact same files, so it's a drop-in swap ahead of a kids' party.
+
 Host a round with `.venv/bin/python trivia_game.py`, which prints two addresses: a **group** screen (put this on a TV or other shared display) that opens on the game's title and a QR code per team, then switches to a live scoreboard and the current question once the round starts; and a **team** page per team, reached by scanning that team's QR code, where that team submits answers on their own phones.
 Play alternates strictly between the two teams each question — whichever team held a question, the other team holds the next one, regardless of who scored — with one twist: if the team up misses (or the clock runs out), the other team gets a one-time steal attempt at the same question before play moves on.
 Answers are free text — just the answer itself, not phrased as a question — graded live by Gemini rather than a human judge or a local heuristic; the same call also writes the judging witch's in-character reaction, a roast for a wrong answer or praise for a right one, each one naming the mortal's actual answer and/or the correct one rather than reacting generically.
 Unlike every other mode in this project, that live grading means trivia genuinely needs network access during play, not just to prepare beforehand.
-See `trivia_game.py` for the exact rules and [docs/trivia.md](docs/trivia.md) for how to prepare and host a round.
+See `trivia_game.py` for the exact rules and [`docs/trivia.md`](docs/trivia.md) for how to prepare and host a round.
 
 ## Hex Hollow Bridge
 
