@@ -109,30 +109,19 @@ from witches import WITCHES, Witch
 
 DEBOUNCE_SEC = 3.0
 
-# Shared: once triggered, how long the beam must stay clear before acting on
-# the tray, so a second item dropped in right after the first one still makes
-# it into the shot. React mode calls wait_for_quiet() right after its
-# triggering break; request mode calls wait_for_drops() instead (see
-# _evaluate_attempt), since there the mortal hasn't dropped anything yet when
-# the wait starts, and it also needs to recognize the hold-to-repeat gesture.
 SETTLE_GAP_SEC = 2.0
+"""Shared: once triggered, how long the beam must stay clear before acting
+on the tray, so a second item dropped in right after the first one still
+makes it into the shot. React mode calls wait_for_quiet() right after its
+triggering break; request mode calls wait_for_drops() instead (see
+_evaluate_attempt), since there the mortal hasn't dropped anything yet when
+the wait starts, and it also needs to recognize the hold-to-repeat gesture."""
 
-# Request-mode tuning.
 INGREDIENT_COUNT = 2
-# Obstruct the beam this long to replay the request.
+"""Request-mode tuning."""
 HOLD_TO_REPEAT_SEC = 1.2
+"""Obstruct the beam this long to replay the request."""
 
-# Live mode switching via a USB gamepad (see controller.py). The mortal holds
-# Select+Start together to open mode selection; a random witch then asks
-# which mode to pick, naming these buttons in-universe (see
-# MODE_SELECT_OPTIONS below), and the mortal answers by pressing one of them.
-# button_0-3 are this pad's four face buttons, each a distinct physical
-# color (see BUTTON_COLORS); button_4/button_5 are the plain gray shoulder
-# buttons. "up"/"down" (the D-pad) are the two unused inputs left, so
-# they're "brew"'s and "play"'s buttons -- those modes are one-shot
-# mini-games rather than persistent modes (see _run_mode_selection()), so
-# they don't need one of the beam-triggered modes' buttons. Remap here if
-# your pad differs.
 MODE_BUTTONS: dict[str, str] = {
     "button_0": "react",
     "button_1": "story",
@@ -143,14 +132,18 @@ MODE_BUTTONS: dict[str, str] = {
     "up": "brew",
     "down": "play",
 }
+"""Live mode switching via a USB gamepad (see controller.py). The mortal
+holds Select+Start together to open mode selection; a random witch then
+asks which mode to pick, naming these buttons in-universe (see
+MODE_SELECT_OPTIONS below), and the mortal answers by pressing one of them.
+button_0-3 are this pad's four face buttons, each a distinct physical
+color (see BUTTON_COLORS); button_4/button_5 are the plain gray shoulder
+buttons. "up"/"down" (the D-pad) are the two unused inputs left, so
+they're "brew"'s and "play"'s buttons -- those modes are one-shot
+mini-games rather than persistent modes (see _run_mode_selection()), so
+they don't need one of the beam-triggered modes' buttons. Remap here if
+your pad differs."""
 
-# The ring shows one of these colors while listing/confirming each mode, so
-# the mortal sees a direct match to the button they're looking at. button_0-3
-# are this pad's actual face-button colors -- confirmed by running
-# `.venv/bin/python controller.py` and pressing each one. button_4/button_5
-# (the talons) and "up"/"down" (the D-pad, physically unlit) are just
-# assigned colors here, distinct from the face buttons' and each other's.
-# In key order: blue, red, yellow, green, cyan, orange, magenta, white.
 BUTTON_COLORS: dict[str, light_control.RGB] = {
     "button_0": light_control.RGB(30, 90, 255),
     "button_1": light_control.RGB(220, 20, 20),
@@ -161,51 +154,62 @@ BUTTON_COLORS: dict[str, light_control.RGB] = {
     "up": light_control.RGB(200, 0, 160),
     "down": light_control.RGB(255, 255, 255),
 }
+"""The ring shows one of these colors while listing/confirming each mode,
+so the mortal sees a direct match to the button they're looking at.
+button_0-3 are this pad's actual face-button colors -- confirmed by running
+`.venv/bin/python controller.py` and pressing each one. button_4/button_5
+(the talons) and "up"/"down" (the D-pad, physically unlit) are just
+assigned colors here, distinct from the face buttons' and each other's.
+In key order: blue, red, yellow, green, cyan, orange, magenta, white."""
 
-# Mode -> ring color, derived from BUTTON_COLORS. Shown steady while that
-# mode's button is being named during the listing, and again during the
-# confirmation if that mode ends up chosen.
 MODE_COLORS: dict[str, light_control.RGB] = {
     mode: BUTTON_COLORS[button] for button, mode in MODE_BUTTONS.items()
 }
+"""Mode -> ring color, derived from BUTTON_COLORS. Shown steady while that
+mode's button is being named during the listing, and again during the
+confirmation if that mode ends up chosen."""
 
-# Select and Start, held together, open mode selection. Confirmed on this pad
-# via `.venv/bin/python controller.py`; remap here if yours differs.
 _SELECT_BUTTON = 8
+"""Select, held with _START_BUTTON, opens mode selection. Confirmed on
+this pad via `.venv/bin/python controller.py`; remap here if yours
+differs."""
 _START_BUTTON = 9
+"""Paired with _SELECT_BUTTON above -- see there."""
 
-# The hand-written mode-select dialogue itself lives on each witch's profile
-# in witches.py (WitchProfile.mode_select_intro/options/confirmations), next
-# to her personality and voice settings rather than duplicated here -- these
-# are just the views this module actually uses.
 MODE_SELECT_INTROS: dict[Witch, str] = {
     w: p.mode_select_intro for w, p in WITCHES.items()
 }
+"""The hand-written mode-select dialogue itself lives on each witch's
+profile in witches.py (WitchProfile.mode_select_intro/options/
+confirmations), next to her personality and voice settings rather than
+duplicated here -- these are just the views this module actually uses."""
 MODE_SELECT_OPTIONS: dict[Witch, dict[str, str]] = {
     w: p.mode_select_options for w, p in WITCHES.items()
 }
+"""See MODE_SELECT_INTROS above."""
 MODE_SELECT_CONFIRMATIONS: dict[Witch, dict[str, str]] = {
     w: p.mode_select_confirmations for w, p in WITCHES.items()
 }
+"""See MODE_SELECT_INTROS above."""
 
 MODE_SELECT_DIR = Path("generated/mode_select")
 
 _dump_thread: threading.Thread | None = None
 
-# Set by main() to the --mode default, then only ever changed by
-# _run_mode_selection() below. A plain module global is enough: CPython's GIL
-# makes a single assignment atomic, and there is exactly one writer.
 _pending_mode: str = "react"
+"""Set by main() to the --mode default, then only ever changed by
+_run_mode_selection() below. A plain module global is enough: CPython's
+GIL makes a single assignment atomic, and there is exactly one writer."""
 
-# Set the instant mode selection opens; cleared by main() right before
-# starting the next round. Threaded into ir_sensor's wait_for_quiet()/
-# wait_for_drops() calls below so an in-progress round's indefinite waits --
-# the only truly unbounded part of a round -- notice and bail out, rather
-# than the switch silently queuing up for whenever the current round would
-# have ended on its own. A short TTS line already in flight is allowed to
-# finish rather than being killed mid-sentence; the next checkpoint after it
-# will catch the abort within a second or two.
 _mode_switch_abort = threading.Event()
+"""Set the instant mode selection opens; cleared by main() right before
+starting the next round. Threaded into ir_sensor's wait_for_quiet()/
+wait_for_drops() calls below so an in-progress round's indefinite waits --
+the only truly unbounded part of a round -- notice and bail out, rather
+than the switch silently queuing up for whenever the current round would
+have ended on its own. A short TTS line already in flight is allowed to
+finish rather than being killed mid-sentence; the next checkpoint after it
+will catch the abort within a second or two."""
 
 
 def _start_ambience() -> None:

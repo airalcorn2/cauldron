@@ -16,9 +16,10 @@ import pygame
 _AXIS_THRESHOLD = 0.5
 
 _joystick: pygame.joystick.JoystickType | None = None
-# Last direction fired per D-pad axis, or None while at rest. Tracked so a
-# held direction doesn't repeat-fire and releasing it resets for next time.
 _axis_state: dict[int, str | None] = {0: None, 1: None}
+"""Last direction fired per D-pad axis, or None while at rest. Tracked
+so a held direction doesn't repeat-fire and releasing it resets for
+next time."""
 
 
 def setup() -> bool:

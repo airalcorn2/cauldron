@@ -39,11 +39,6 @@ OUTPUT_DIR = Path("generated")
 class VoiceSettings:
     """ElevenLabs delivery controls for eleven_v4.
 
-    stability          Higher is steadier in pitch and rhythm; lower is more
-                       expressive but erratic.
-    similarity_boost   Higher tracks the source voice more closely.
-    use_speaker_boost  Sharpens the voice at a small latency cost.
-
     v4 dropped the style/speed sliders v2 had -- it reads emphasis, pacing,
     and emotion from the text itself instead (punctuation, and bracketed
     Audio Tags like "[stress on next word]"; see trivia_game.py/trivia_data.py
@@ -51,8 +46,12 @@ class VoiceSettings:
     """
 
     stability: float
+    """Higher is steadier in pitch and rhythm; lower is more expressive
+    but erratic."""
     similarity_boost: float
+    """Higher tracks the source voice more closely."""
     use_speaker_boost: bool = True
+    """Sharpens the voice at a small latency cost."""
 
     def as_payload(self) -> dict[str, float | bool]:
         """Return the ``voice_settings`` object for the TTS request body."""
@@ -76,18 +75,19 @@ def _voice_settings(profile: WitchProfile) -> VoiceSettings:
     )
 
 
-# Premium voices from your ElevenLabs account. Used by the live controller.
 VOICES: dict[Witch, VoiceProfile] = {
     w: VoiceProfile(p.voice_id, _voice_settings(p)) for w, p in WITCHES.items()
 }
+"""Premium voices from your ElevenLabs account. Used by the live
+controller."""
 
-# Free premade voices for the test paths (this CLI and cauldron_controller.py
-# --once). They must be voices your key can address: on the free tier an
-# unavailable voice_id returns HTTP 402. Refresh them from --list-voices if a
-# call fails.
 FREE_VOICES: dict[Witch, VoiceProfile] = {
     w: VoiceProfile(p.free_voice_id, _voice_settings(p)) for w, p in WITCHES.items()
 }
+"""Free premade voices for the test paths (this CLI and
+cauldron_controller.py --once). They must be voices your key can
+address: on the free tier an unavailable voice_id returns HTTP 402.
+Refresh them from --list-voices if a call fails."""
 
 
 async def _generate_speech(

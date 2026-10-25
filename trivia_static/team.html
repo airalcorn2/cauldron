@@ -106,7 +106,7 @@
   <div id="prompt" hidden>
     <div id="category"></div>
     <div id="clue"></div>
-    <textarea id="answer" placeholder="Just the answer -- no need to phrase it as a question."></textarea>
+    <textarea id="answer" placeholder="Just the answer – no need to phrase it as a question."></textarea>
     <button id="submit">Submit Answer</button>
   </div>
 </div>
@@ -143,7 +143,7 @@ if (!myTeam) {
   const ws = new WebSocket(`ws://${location.host}/ws`);
 
   ws.onopen = () => { statusEl.textContent = "Waiting for the next question..."; };
-  ws.onclose = () => { statusEl.textContent = "Disconnected -- reload to reconnect."; };
+  ws.onclose = () => { statusEl.textContent = "Disconnected – reload to reconnect."; };
 
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
@@ -155,25 +155,25 @@ if (!myTeam) {
       categoryEl.textContent = `${data.category}  ·  Question ${data.question_number}/${data.total_questions}`;
       clueEl.textContent = data.clue;
       answerEl.value = "";
-      answerEl.placeholder = "Just the answer -- no need to phrase it as a question.";
+      answerEl.placeholder = "Just the answer – no need to phrase it as a question.";
       const myTurn = data.team === myTeam;
       answerEl.disabled = !myTurn;
       submitEl.disabled = !myTurn;
       const steal = data.phase === "steal";
       statusEl.textContent = myTurn
-        ? (steal ? "🔮 Steal chance -- answer below!" : "Your team's turn -- answer below!")
+        ? (steal ? "🔮 Steal chance – answer below!" : "Your team's turn – answer below!")
         : (steal ? `${teamNames[data.team]} is trying to steal...` : `${teamNames[data.team]} is answering...`);
     } else if (data.type === "tiebreaker") {
       // Sudden death -- unlike a normal prompt, BOTH teams can answer
       // this one at once, so there's no "myTurn" gate here.
       promptEl.hidden = false;
-      categoryEl.textContent = "🎃 SUDDEN DEATH -- CLOSEST GUESS WINS";
+      categoryEl.textContent = "🎃 SUDDEN DEATH – CLOSEST GUESS WINS";
       clueEl.textContent = data.question;
       answerEl.value = "";
       answerEl.placeholder = "Your best numeric guess...";
       answerEl.disabled = false;
       submitEl.disabled = false;
-      statusEl.textContent = "Tied game! Both teams guess -- closest wins it all.";
+      statusEl.textContent = "Tied game! Both teams guess – closest wins it all.";
     } else if (data.type === "ack") {
       if (data.accepted) {
         statusEl.textContent = "Answer submitted! Waiting on the witches...";
@@ -188,7 +188,7 @@ if (!myTeam) {
       // including its own input getting disabled.
       if (data.team !== myTeam) {
         statusEl.textContent = data.stop_timer
-          ? `${teamNames[data.team]} locked in an answer -- the witches are judging...`
+          ? `${teamNames[data.team]} locked in an answer – the witches are judging...`
           : `${teamNames[data.team]} locked in a guess...`;
       }
     } else if (data.type === "result") {

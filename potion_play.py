@@ -51,78 +51,81 @@ from light_control import RGB
 from voice_generator import VOICES, VoiceProfile, generate_to_path
 from witches import WITCHES, Witch
 
-# 20Hz.
 TICK_SEC = 0.05
+"""20Hz."""
 
 CACHE_DIR = Path("generated/potion_play")
 
-# Mirrors cauldron_controller.BUTTON_COLORS for button_0-3 -- duplicated
-# rather than imported, same as brew_game.py's button indices, to keep
-# these mini-modes free of any dependency on the orchestrator.
 _FACE_COLORS: dict[int, tuple[str, RGB]] = {
     0: ("blue", RGB(30, 90, 255)),
     1: ("red", RGB(220, 20, 20)),
     2: ("yellow", RGB(230, 200, 0)),
     3: ("green", RGB(60, 200, 40)),
 }
+"""Mirrors cauldron_controller.BUTTON_COLORS for button_0-3 -- duplicated
+rather than imported, same as brew_game.py's button indices, to keep
+these mini-modes free of any dependency on the orchestrator."""
 _LEFT_TALON = 4
 _RIGHT_TALON = 5
 
 INGREDIENTS_PER_COLOR = 6
 
-# Tuning, found by feel. SPRINKLE_FRACTION is the fraction of pixels hit
-# per sprinkle, SPRINKLE_INCREMENT the per-channel add per sprinkle.
 SPRINKLE_FRACTION = 0.4
+"""Tuning, found by feel. The fraction of pixels hit per sprinkle."""
 SPRINKLE_INCREMENT = 150.0
-# Raw tint magnitude (a pixel's peak channel) at which the white shimmer is
-# about 2/3 replaced by the sprinkled color -- see render().
+"""The per-channel add per sprinkle."""
 TINT_SATURATION_SCALE = 100.0
-# A fully-sprinkled pixel's peak channel normalizes to this, not 255 -- see
-# render(). Reserves (255 - this) of real brightness headroom so a pop has
-# somewhere to visibly go even on an already fully-colored pixel.
+"""Raw tint magnitude (a pixel's peak channel) at which the white
+shimmer is about 2/3 replaced by the sprinkled color -- see render()."""
 BASE_PEAK_BRIGHTNESS = 130.0
-# STIR_IMPULSE is added to spin per talon tap; STIR_DECAY_PER_SEC is how
-# fast spin relaxes toward 0.
+"""A fully-sprinkled pixel's peak channel normalizes to this, not 255 --
+see render(). Reserves (255 - this) of real brightness headroom so a pop
+has somewhere to visibly go even on an already fully-colored pixel."""
 STIR_IMPULSE = 1.5
+"""Added to spin per talon tap."""
 STIR_DECAY_PER_SEC = 1.5
-# Heat is three discrete, named levels (up/down tap through them, same as
-# rainbow/comet's left/right) rather than a continuous dial -- easier to
-# debug "does it look right at each level" than tuning one continuous rate.
+"""How fast spin relaxes toward 0."""
 HEAT_LEVELS = 3
-# No bubbling until the mortal asks for it.
+"""Heat is three discrete, named levels (up/down tap through them, same
+as rainbow/comet's left/right) rather than a continuous dial -- easier
+to debug "does it look right at each level" than tuning one continuous
+rate."""
 DEFAULT_HEAT = 0
-# Expected pops/sec across the ring, per level.
+"""No bubbling until the mortal asks for it."""
 POP_RATES_PER_SEC = (0.0, 30.0, 85.0)
+"""Expected pops/sec across the ring, per level."""
 POP_LIFETIME_SEC = 0.4
 POP_BOOST = 180.0
-# Neighboring pixels catch some of a pop's boost too, falling off with
-# distance -- a single lit pixel among 144 barely reads as a "pop" otherwise.
 POP_RADIUS = 3
+"""Neighboring pixels catch some of a pop's boost too, falling off with
+distance -- a single lit pixel among 144 barely reads as a "pop"
+otherwise."""
 
-# Per-pixel tint magnitude the rainbow fades toward, well past
-# TINT_SATURATION_SCALE so it reads at full color immediately.
 RAINBOW_MAGNITUDE = 300.0
-# How long the fade into the rainbow takes.
+"""Per-pixel tint magnitude the rainbow fades toward, well past
+TINT_SATURATION_SCALE so it reads at full color immediately."""
 RAINBOW_FADE_SEC = 1.5
-# Spin impulse on trigger, for a swirling transition -- stronger than a
-# talon's STIR_IMPULSE, since this is meant to read as a bigger, more
-# dramatic flourish.
+"""How long the fade into the rainbow takes."""
 RAINBOW_SPIN_IMPULSE = 4.0
-# Time for the comet to sweep once around the whole ring.
+"""Spin impulse on trigger, for a swirling transition -- stronger than a
+talon's STIR_IMPULSE, since this is meant to read as a bigger, more
+dramatic flourish."""
 COMET_LOOP_SEC = 2.0
-# Pixels behind the comet's leading edge that still glow, fading out.
+"""Time for the comet to sweep once around the whole ring."""
 COMET_TRAIL_LENGTH = 12
-# Brightness boost at the comet's leading edge.
+"""Pixels behind the comet's leading edge that still glow, fading out."""
 COMET_BOOST = 220.0
+"""Brightness boost at the comet's leading edge."""
 
 _PIXEL_COUNT = light_control.STRIP_CONFIG.count
 
-# A fixed per-pixel phase offset for the idle shimmer, sampled once at
-# import time (not fresh each frame -- see brew_game.py's speckle texture
-# for why). Each pixel twinkles on its own schedule, in place; nothing here
-# rotates, which is what keeps the idle shimmer "non-spinning."
 _rng = random.Random(1)
+"""A fixed per-pixel phase offset for the idle shimmer, sampled once at
+import time (not fresh each frame -- see brew_game.py's speckle texture
+for why). Each pixel twinkles on its own schedule, in place; nothing
+here rotates, which is what keeps the idle shimmer "non-spinning."""
 _SHIMMER_PHASE = [_rng.random() for _ in range(_PIXEL_COUNT)]
+"""See _rng above."""
 SHIMMER_HZ = 0.35
 SHIMMER_MIN = 90.0
 SHIMMER_MAX = 170.0
@@ -433,11 +436,11 @@ def ensure_cache() -> None:
 _bubble_thread: threading.Thread | None = None
 _bubble_stop: threading.Event | None = None
 
-# One relative volume per heat level -- aplay has no live volume control
-# (unlike mpg123's -f, used elsewhere), so each level is instead a
-# separately pre-rendered, pre-scaled copy of the SFX (see
-# _ensure_bubble_audio()), and the loop just picks which file to play.
 BUBBLE_VOLUMES_PER_HEAT = (0.2, 0.55, 1.0)
+"""One relative volume per heat level -- aplay has no live volume control
+(unlike mpg123's -f, used elsewhere), so each level is instead a
+separately pre-rendered, pre-scaled copy of the SFX (see
+_ensure_bubble_audio()), and the loop just picks which file to play."""
 
 
 def _bubble_audio_path(level: int) -> Path:

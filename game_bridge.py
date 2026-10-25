@@ -10,9 +10,10 @@ Talking to one of the three decorative companion witches in-game, or
 inspecting an environmental landmark (a gravestone, a lantern, the
 wishing well in the corn maze, etc.), has the matching real witch read
 that exact line for real too -- see HOLLOW_COMPANION_LINES and
-HOLLOW_LANDMARKS. The corn maze (Hex Hollow's second area) gets the same
-real-world treatment as the main hollow: a splash/flash per treat
-collected, and a witch cheer plus a swirl on its own completion.
+hollow_landmarks.HOLLOW_LANDMARKS. The corn maze (Hex Hollow's second
+area) gets the same real-world treatment as the main hollow: a
+splash/flash per treat collected, and a witch cheer plus a swirl on its
+own completion.
 
 Generic UI nudges ("satchel full," "look for ingredients," and the like)
 deliberately do NOT get a real-world reading -- they fire constantly just
@@ -49,15 +50,13 @@ from aiohttp import web
 
 import audio
 import light_control
+from hollow_landmarks import HOLLOW_LANDMARKS
 from light_control import RGB
 from voice_generator import VOICES, VoiceProfile, generate_to_path
 from witches import WITCHES, Witch
 
 CACHE_DIR = Path("generated/hollow")
 
-# This bridge's own palette -- picked to evoke each ingredient as it
-# actually looks in the game (e.g., the mooncap mushroom's red cap),
-# not synced from anywhere in the Godot project itself.
 INGREDIENT_COLORS: dict[str, RGB] = {
     "mushroom": RGB(255, 0, 25),
     "pumpkin": RGB(255, 50, 0),
@@ -66,27 +65,28 @@ INGREDIENT_COLORS: dict[str, RGB] = {
     "essence": RGB(0, 255, 230),
     "moonflower": RGB(255, 40, 180),
 }
+"""This bridge's own palette -- picked to evoke each ingredient as it
+actually looks in the game (e.g., the mooncap mushroom's red cap), not
+synced from anywhere in the Godot project itself."""
 
-# A fixed, hand-written victory spell, one line per witch, recited in
-# turn (Violet, Amber, Hazel -- Witch's own iteration order) once the
-# announcement (WitchProfile.hollow_victory) is done -- same {witch:
-# line}-in-order recitation convention as
-# cauldron_controller.recite_spell(), just hand-written rather than
-# Gemini-generated: there's no photo here for a vision model to react to.
 VICTORY_SPELL: dict[Witch, str] = {
-    Witch.VIOLET: "By moonlight gathered, root and bone and bloom,",
-    Witch.AMBER: "the hollow's magic chases out the gloom!",
-    Witch.HAZEL: "So mote it be. Go on, then. Enjoy your little boom.",
+    Witch.VIOLET: "The simmer turns silver, the hollow takes flight,",
+    Witch.AMBER: "The magic is loose and she's owning the night!",
+    Witch.HAZEL: "Hmph. Put out the embers. It's far too bright.",
 }
+"""A fixed victory spell, one line per witch, recited in turn (Violet,
+Amber, Hazel -- Witch's own iteration order) once the announcement
+(WitchProfile.hollow_victory) is done -- same {witch: line}-in-order
+recitation convention as cauldron_controller.recite_spell(). Gemini-
+generated once, offline, and then kept fixed rather than regenerated
+live: there's no photo here for a vision model to react to, so a fresh
+API call on every victory would just reroll the same idea for no
+benefit."""
 
-# Warm harvest tone for the corn maze's treat splash -- distinct from any
-# single ingredient color since treats aren't tied to one.
 TREAT_COLOR = RGB(230, 160, 40)
+"""Warm harvest tone for the corn maze's treat splash -- distinct from
+any single ingredient color since treats aren't tied to one."""
 
-# Each companion witch in-game speaks her own hand-written lines (see
-# hollow_world.gd's COMPANION_DIALOGUE, which this must stay in sync
-# with) -- the real witch of the same name reads them for real, a direct
-# 1:1 mapping rather than a random pick.
 HOLLOW_COMPANION_LINES: dict[Witch, list[str]] = {
     Witch.VIOLET: [
         "Ahh, the moon is a silver spoon tonight, dear. Stir clockwise for luck.",
@@ -104,239 +104,11 @@ HOLLOW_COMPANION_LINES: dict[Witch, list[str]] = {
         "Mind the moonflower. It wilts when young witches hurry.",
     ],
 }
+"""Each companion witch in-game speaks her own hand-written lines (see
+hollow_world.gd's COMPANION_DIALOGUE, which this must stay in sync with)
+-- the real witch of the same name reads them for real, a direct 1:1
+mapping rather than a random pick."""
 
-# Environmental landmark readings, reusing the exact text from each
-# landmark's own epitaphs/lines array in hollow_world.gd (area "hollow")
-# or corn_maze.gd (area "corn_maze") -- keyed (area, landmark id), since
-# landmark ids are only unique within one area, not across both. One
-# witch assigned per landmark (round robin, not random), so only that
-# one witch's voice needs caching per line rather than all three.
-HOLLOW_LANDMARKS: dict[tuple[str, str], tuple[Witch, list[str]]] = {
-    ("hollow", "gravestone_crooked"): (
-        Witch.VIOLET,
-        [
-            "Here lies Reginald. He chased a ghost. The ghost won.",
-            "He asked the moon for directions. It pointed down.",
-        ],
-    ),
-    ("hollow", "gravestone_mossy"): (
-        Witch.AMBER,
-        [
-            "Beloved Beatrice. She always said the grave was half full.",
-            "Rest in peace. Please leave the offerings where they are.",
-        ],
-    ),
-    ("hollow", "lantern"): (
-        Witch.HAZEL,
-        [
-            "The flame went out years ago. Its shadow still flickers.",
-            "Someone lit this lantern at midnight. Someone else answered.",
-        ],
-    ),
-    ("hollow", "oak"): (
-        Witch.VIOLET,
-        [
-            "The oak whispers your name, but only on the second listen.",
-            "A face is carved in the bark. It looks more awake than you do.",
-        ],
-    ),
-    ("hollow", "pond_sign"): (
-        Witch.AMBER,
-        [
-            "POND RULES: No feeding the fish. They remember faces.",
-            "The water is six inches deep. The reflection is much deeper.",
-        ],
-    ),
-    ("hollow", "pumpkin_winking"): (
-        Witch.HAZEL,
-        [
-            "This pumpkin has a heartbeat. It is trying to pretend it doesn't.",
-            "The grin is painted on. The blink was not.",
-        ],
-    ),
-    ("hollow", "pumpkin_smallest"): (
-        Witch.VIOLET,
-        [
-            "It is holding a secret. It refuses to share.",
-            "A tiny stem, a tiny curse, an enormous attitude.",
-        ],
-    ),
-    ("corn_maze", "well"): (
-        Witch.AMBER,
-        [
-            "Drop in a wish, not a witch. The last one clogged the bucket.",
-            "Your reflection winks first. How terribly impolite.",
-            "A voice below whispers: 'One penny for luck. Two for plausible deniability.'",
-        ],
-    ),
-    ("corn_maze", "tree"): (
-        Witch.HAZEL,
-        [
-            "The branches creak: 'I know every shortcut. I just enjoy watching you wander.'",
-            "The lantern flickers twice. A leaf lands on your hat like a tiny blessing.",
-            "'No broom parking,' says the tree. 'The squirrels have complained.'",
-        ],
-    ),
-    ("corn_maze", "wagon"): (
-        Witch.VIOLET,
-        [
-            "The delivery note reads: 'Three pumpkins, two curses. Handle with scare.'",
-            "One pumpkin rolls an inch toward you. You politely pretend not to notice.",
-            "The wheels turn without a breeze. Even the wagons go haunting after hours.",
-        ],
-    ),
-    # The Whispering Manor (Hex Hollow's third/final area) -- 18
-    # landmarks reusing manor_interactions.gd's exact text verbatim.
-    ("house", "portrait"): (
-        Witch.VIOLET,
-        [
-            "The lady in the frame sighs. 'Do straighten your hat. We have standards, even after death.'",
-            "Her eyes follow you. 'Of course I stare, dear. Nobody brings me a book.'",
-            "A painted hand points toward the foyer. 'Four keepsakes. One brew. Then kindly let us sleep.'",
-        ],
-    ),
-    ("house", "piano"): (
-        Witch.AMBER,
-        [
-            'One key plays by itself. The next note is a tiny, offended sneeze.',
-            "A ghostly pianist whispers: 'Requests cost a shilling. Complaints cost two.'",
-            'The sheet music is titled A Minor Inconvenience. Every note is a boo.',
-        ],
-    ),
-    ("house", "clock"): (
-        Witch.HAZEL,
-        [
-            "It strikes thirteen. A voice inside mutters: 'Daylight haunting time. Terrible business.'",
-            "The pendulum swings backward. 'You are not late,' says the clock. 'Yesterday is early.'",
-            'A little brass plaque reads: Winding optional. Existential dread included.',
-        ],
-    ),
-    ("house", "oven"): (
-        Witch.VIOLET,
-        [
-            "Something in the chimney asks for toast. 'Lightly frightened, please.'",
-            'The kettle whistles a funeral march, then apologizes. It meant to make tea.',
-            'A recipe card says: Add one pinch of salt. Do not add the cook. Again.',
-        ],
-    ),
-    ("house", "supper_table"): (
-        Witch.AMBER,
-        [
-            'The flowers look fresh, which is rude of them at this hour.',
-            'Four candles burn bravely; none recalls who set the table.',
-            'Dinner is late again. The ghosts blame the soup, naturally.',
-        ],
-    ),
-    ("house", "sideboard"): (
-        Witch.HAZEL,
-        [
-            'The crockery has survived three hauntings and one dreadful potluck.',
-            'Pumpkins on parade, each grinning like it knows the punchline.',
-            'A plate whispers that porcelain is simply crockery with ambitions.',
-        ],
-    ),
-    ("house", "mirror"): (
-        Witch.VIOLET,
-        [
-            'The oval shows a ghostly guest who insists she is your better side.',
-            'Its glow is flattering, though it makes every eyebrow look haunted.',
-            'A very pale reflection bows first. Good manners are not dead.',
-        ],
-    ),
-    ("house", "bookshelf"): (
-        Witch.AMBER,
-        [
-            'The forbidden books are shelved by danger, then alphabetically.',
-            "One dusty volume warns, 'Do not open.' How refreshingly clear.",
-            'Even the spines look nervous when the librarian is nearby.',
-        ],
-    ),
-    ("house", "writing_desk"): (
-        Witch.HAZEL,
-        [
-            'The abandoned notes end mid-sentence, then resume with better penmanship.',
-            "Someone wrote, 'Dear diary,' and immediately lost their nerve.",
-            'Ink stains gather like tiny ghosts with unfinished business.',
-        ],
-    ),
-    ("house", "globe"): (
-        Witch.VIOLET,
-        [
-            'The globe marks every place the manor has never been invited.',
-            'Its oceans look calm; the continents are plainly plotting something.',
-            'A careful spin reveals no country named Somewhere Sensible.',
-        ],
-    ),
-    ("house", "fireplace"): (
-        Witch.AMBER,
-        [
-            'The flames keep a warm little secret and refuse to share it.',
-            'Ash settles like gray snow, very cozy and slightly judgmental.',
-            'The hearth has heard every parlor tale and still wants one more.',
-        ],
-    ),
-    ("house", "armchair"): (
-        Witch.HAZEL,
-        [
-            'The green cushions sag as if someone invisible has just stood up.',
-            'Apparently empty, though the upholstery has excellent posture.',
-            'A chair this dignified must be hiding a very small aristocrat.',
-        ],
-    ),
-    ("house", "dollhouse"): (
-        Witch.VIOLET,
-        [
-            'The tiny house has a tiny foyer, for tiny guests with tiny secrets.',
-            'Every window is dark, which is sensible for a house this small.',
-            'The miniature parlor is tidier than ours. No one likes a show-off.',
-        ],
-    ),
-    ("house", "toy_chest"): (
-        Witch.AMBER,
-        [
-            'Toys spill out like a cheerful rebellion against sensible storage.',
-            'A wooden drum hides beneath the heap, pretending innocence.',
-            'The chest contains enough playthings to occupy one ghost for centuries.',
-        ],
-    ),
-    ("house", "rocking_horse"): (
-        Witch.HAZEL,
-        [
-            'The painted horse waits patiently for a rider with impeccable balance.',
-            'Its wooden smile says it has crossed stranger rooms than this.',
-            'A gallant steed, though its idea of galloping is gently rocking.',
-        ],
-    ),
-    ("house", "bed"): (
-        Witch.VIOLET,
-        [
-            'The plush rabbit keeps watch with the solemnity of a tiny guard.',
-            'The blankets are tucked in neatly; even nightmares must knock first.',
-            'A cozy bed, made for dreams and one very long-eared chaperone.',
-        ],
-    ),
-    ("house", "stag"): (
-        Witch.AMBER,
-        [
-            "The antlers crown the foyer like nature's most opinionated chandelier.",
-            'This noble stag has witnessed every entrance and judged most of them.',
-            'Dust rests on its brow, giving the old monarch a silver crown.',
-        ],
-    ),
-    ("house", "pantry"): (
-        Witch.HAZEL,
-        [
-            'The jars stand in ranks, each guarding a mystery with a label.',
-            'Crockery crowds the shelves like gossiping aunts at a village feast.',
-            'Some preserves are older than the house and considerably less chatty.',
-        ],
-    ),
-}
-
-# One announcement per witch per fall treat (see corn_maze.gd's
-# TREAT_DATA) -- same shape as WitchProfile.hollow_ingredients, just
-# kept local to this bridge rather than the shared witch registry, since
-# treats are a Hex Hollow-specific concept, not a core witch trait.
 HOLLOW_TREATS: dict[Witch, dict[str, str]] = {
     Witch.VIOLET: {
         "candy_apple": "Ahh, a candy apple, glossy as a spell gone right.",
@@ -354,18 +126,21 @@ HOLLOW_TREATS: dict[Witch, dict[str, str]] = {
         "candy_corn": "Candy corn. Hmph. At least it doesn't melt.",
     },
 }
+"""One announcement per witch per fall treat (see corn_maze.gd's
+TREAT_DATA) -- same shape as WitchProfile.hollow_ingredients, just kept
+local to this bridge rather than the shared witch registry, since treats
+are a Hex Hollow-specific concept, not a core witch trait."""
 
-# A lighter-weight victory line for the corn maze's own completion -- one
-# random witch, not the full three-witch VICTORY_SPELL recitation, since
-# this is a secondary/bonus area rather than the main game's finale.
 MAZE_VICTORY: dict[Witch, str] = {
     Witch.VIOLET: "Ahh, the harvest spell bubbles over at last. Well done, truly.",
     Witch.AMBER: "Ooh, you did it! The corn maze bows to you.",
     Witch.HAZEL: "Hmph. Not bad. The maze doesn't impress easily.",
 }
+"""A lighter-weight victory line for the corn maze's own completion --
+one random witch, not the full three-witch VICTORY_SPELL recitation,
+since this is a secondary/bonus area rather than the main game's
+finale."""
 
-# One announcement per witch per cursed keepsake (see haunted_house.gd's
-# ITEM_DATA) -- same shape as HOLLOW_TREATS.
 HOUSE_KEEPSAKES: dict[Witch, dict[str, str]] = {
     Witch.VIOLET: {
         "silver_key": "Ahh, a silver key. Every lock remembers its own name.",
@@ -386,22 +161,25 @@ HOUSE_KEEPSAKES: dict[Witch, dict[str, str]] = {
         "velvet_ribbon": "A velvet ribbon. Hmph. At least it's tidy.",
     },
 }
+"""One announcement per witch per cursed keepsake (see haunted_house.gd's
+ITEM_DATA) -- same shape as HOLLOW_TREATS."""
 
-# The Whispering Manor is the game's true ending (its own overlay says
-# "Happy Halloween!"), so its completion gets the same grand treatment as
-# the main hollow's own finale -- an announcement, then all three
-# witches recite a fixed spell in turn -- rather than the corn maze's
-# lighter one-witch MAZE_VICTORY.
 HOUSE_VICTORY: dict[Witch, str] = {
     Witch.VIOLET: "Ahh, four keepsakes gathered, and the manor finally rests.",
     Witch.AMBER: "Ooh, you actually did it! The whole house, done!",
     Witch.HAZEL: "Hmph. The manor's quiet now. About time.",
 }
+"""The Whispering Manor is the game's true ending (its own overlay says
+"Happy Halloween!"), so its completion gets the same grand treatment as
+the main hollow's own finale -- this announcement, then all three
+witches recite HOUSE_VICTORY_SPELL below in turn -- rather than the corn
+maze's lighter one-witch MAZE_VICTORY."""
 HOUSE_VICTORY_SPELL: dict[Witch, str] = {
     Witch.VIOLET: "By silver key and candle's light,",
     Witch.AMBER: "the manor settles into the night.",
     Witch.HAZEL: "So mote it be. Sleep well. Good riddance, and good night.",
 }
+"""The spell recited after HOUSE_VICTORY's announcement -- see there."""
 
 
 def _ingredient_audio_path(witch: Witch, ingredient_id: str) -> Path:
@@ -716,21 +494,21 @@ async def _react_to_house_victory() -> None:
         await loop.run_in_executor(None, light_control.start_rainbow)
 
 
-# asyncio only holds a weak reference to a task -- one with nothing else
-# referencing it can be garbage-collected mid-playback, cutting a witch
-# off partway through her line. _spawn() below keeps a strong reference
-# until the task finishes, for every fire-and-forget reaction.
 _background_tasks: set[asyncio.Task[None]] = set()
+"""asyncio only holds a weak reference to a task -- one with nothing else
+referencing it can be garbage-collected mid-playback, cutting a witch off
+partway through her line. _spawn() below keeps a strong reference until
+the task finishes, for every fire-and-forget reaction."""
 
-# The final ingredient's /deposit and the /victory that immediately
-# follows it (see hollow_world.gd's interact()) arrive close enough
-# together that their reactions would otherwise run concurrently --
-# both fighting over the same LED strip and the same pygame.mixer
-# state (audio.play_file() toggles pygame.mixer.quit()/init() around
-# each blocking call, which isn't safe from two threads at once). Every
-# reaction acquires this before touching any hardware, so a later one
-# just waits for the current one to finish instead of racing it.
 _reaction_lock = asyncio.Lock()
+"""The final ingredient's /deposit and the /victory that immediately
+follows it (see hollow_world.gd's interact()) arrive close enough
+together that their reactions would otherwise run concurrently -- both
+fighting over the same LED strip and the same pygame.mixer state
+(audio.play_file() toggles pygame.mixer.quit()/init() around each
+blocking call, which isn't safe from two threads at once). Every
+reaction acquires this before touching any hardware, so a later one just
+waits for the current one to finish instead of racing it."""
 
 
 def _spawn(coro: Coroutine[Any, Any, None]) -> None:

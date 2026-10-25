@@ -47,11 +47,12 @@ class RGB:
 
 
 BLACK = RGB(0, 0, 0)
-# GREEN is the success shimmer, RED the failure fade, GOLD victory_swirl()'s
-# comet color.
 GREEN = RGB(60, 200, 40)
+"""The success shimmer."""
 RED = RGB(220, 20, 20)
+"""The failure fade."""
 GOLD = RGB(255, 190, 30)
+"""victory_swirl()'s comet color."""
 SPARKLE = RGB(255, 255, 255)
 
 
@@ -60,11 +61,11 @@ class StripConfig:
     """Wiring and timing parameters for the LED strip."""
 
     count: int = 144
-    # GPIO 10 / SPI0 MOSI (physical pin 19). SPI mode needs no root.
     pin: int = 10
+    """GPIO 10 / SPI0 MOSI (physical pin 19). SPI mode needs no root."""
     freq_hz: int = 800_000
-    # Ignored in SPI mode; kept for the PixelStrip signature.
     dma: int = 10
+    """Ignored in SPI mode; kept for the PixelStrip signature."""
     brightness: int = 20
     invert: bool = False
     channel: int = 0
@@ -88,38 +89,40 @@ STRIP_CONFIG = StripConfig()
 
 WITCH_COLORS: dict[Witch, RGB] = {w: RGB(*p.color) for w, p in WITCHES.items()}
 
-# Background strobe shown while the cauldron works (capture and vision model).
-# It cycles through the three witch colors.
 _FLICKER_COLORS: tuple[RGB, ...] = tuple(WITCH_COLORS.values())
+"""Background strobe shown while the cauldron works (capture and vision
+model). It cycles through the three witch colors."""
 
 _strip: PixelStrip | None = None
 _flicker_thread: threading.Thread | None = None
 _flicker_stop: threading.Event | None = None
 _rainbow_thread: threading.Thread | None = None
 _rainbow_stop: threading.Event | None = None
-# Transient brightness pops laid over whatever start_rainbow()'s own loop
-# is painting -- see trigger_splash(). (pixel, spawn_time, lifetime, color)
-# tuples; only the rainbow thread ever reads/prunes this, and
-# trigger_splash() only ever appends to it, so there's nothing for the two
-# threads to corrupt by racing on it.
 _splash_pops: list[tuple[int, float, float, RGB]] = []
-# Pops spawned per trigger_splash() call.
+"""Transient brightness pops laid over whatever start_rainbow()'s own loop
+is painting -- see trigger_splash(). (pixel, spawn_time, lifetime, color)
+tuples; only the rainbow thread ever reads/prunes this, and
+trigger_splash() only ever appends to it, so there's nothing for the two
+threads to corrupt by racing on it."""
 _SPLASH_POP_COUNT = 26
-# Neighboring pixels catch some of a pop's boost too, falling off with
-# distance -- same reasoning as potion_play.py's POP_RADIUS: a single lit
-# pixel among 144 barely reads as anything.
+"""Pops spawned per trigger_splash() call."""
 _SPLASH_POP_RADIUS = 3
-# How fast a pop's white-blend ramps up with distance/age -- tuned by feel.
+"""Neighboring pixels catch some of a pop's boost too, falling off with
+distance -- same reasoning as potion_play.py's POP_RADIUS: a single lit
+pixel among 144 barely reads as anything."""
 _SPLASH_POP_BOOST = 500.0
-# Rainbow brightness, below full value -- not required for the white-blend
-# pop effect to show up (see start_rainbow()'s render loop), but widens the
-# contrast between the rainbow's own hues and a pop's white peak.
+"""How fast a pop's white-blend ramps up with distance/age -- tuned by
+feel."""
 _RAINBOW_VALUE = 0.7
-# Whatever set_leds()/set_pixels() last painted, so fade_to_black() can fade
-# out of it -- e.g., brew_game.py's live render, left on the ring after a
-# round ends (see run()) -- without needing to read pixel state back from
-# the strip itself.
+"""Rainbow brightness, below full value -- not required for the
+white-blend pop effect to show up (see start_rainbow()'s render loop),
+but widens the contrast between the rainbow's own hues and a pop's white
+peak."""
 _last_colors: list[RGB] = []
+"""Whatever set_leds()/set_pixels() last painted, so fade_to_black() can
+fade out of it -- e.g., brew_game.py's live render, left on the ring
+after a round ends (see run()) -- without needing to read pixel state
+back from the strip itself."""
 
 
 def setup() -> None:

@@ -25,17 +25,6 @@ class NumericTiebreaker:
     source: str
 
 
-# Hand-picked and fact-checked against the cited source -- unlike every
-# other clue in this game (pulled from the Jeopardy dataset, whose own
-# accuracy isn't this project's to vouch for), a tiebreaker only ever
-# fires live in front of a room with a tied score, so it has to hold up
-# to someone looking it up on the spot. One is picked at random each time
-# a tiebreaker fires.
-#
-# A few entries (franchise film counts, the NRF Halloween-spending figure)
-# are explicitly scoped to "as of" a date or year rather than phrased as
-# eternally true -- re-verify those specific ones before reusing this list
-# many years from now, since a sequel or a new survey can move the number.
 TIEBREAKER_QUESTIONS = (
     NumericTiebreaker(
         question=(
@@ -44,7 +33,7 @@ TIEBREAKER_QUESTIONS = (
             "executed for witchcraft during the trials?"
         ),
         answer=19.0,
-        source="Wikipedia: Salem witch trials -- 19 hanged (a 20th, Giles "
+        source="Wikipedia: Salem witch trials – 19 hanged (a 20th, Giles "
         "Corey, was separately pressed to death for refusing to enter a "
         "plea, which isn't counted as a formal execution).",
     ),
@@ -54,7 +43,7 @@ TIEBREAKER_QUESTIONS = (
             "exactly how many people were hanged for witchcraft?"
         ),
         answer=10.0,
-        source="Wikipedia: Pendle witches -- 9 hanged together at "
+        source="Wikipedia: Pendle witches – 9 hanged together at "
         "Lancaster on 20 August 1612, plus a 10th (Jennet Preston) hanged "
         "separately at York on 29 July 1612.",
     ),
@@ -64,7 +53,7 @@ TIEBREAKER_QUESTIONS = (
             "attributed to Jack the Ripper in Whitechapel, London, in 1888?"
         ),
         answer=5.0,
-        source="Wikipedia: Jack the Ripper -- the historians' consensus "
+        source="Wikipedia: Jack the Ripper – the historians' consensus "
         "\"canonical five\"; some researchers attribute more or fewer "
         "murders to him.",
     ),
@@ -75,7 +64,7 @@ TIEBREAKER_QUESTIONS = (
             "investigators to have committed?"
         ),
         answer=5.0,
-        source="Wikipedia: Zodiac Killer -- 5 confirmed; he claimed 37 "
+        source="Wikipedia: Zodiac Killer – 5 confirmed; he claimed 37 "
         "victims in letters to police, never substantiated.",
     ),
     NumericTiebreaker(
@@ -92,7 +81,7 @@ TIEBREAKER_QUESTIONS = (
             "counts, combining his Wisconsin and Ohio killings?"
         ),
         answer=16.0,
-        source="Wikipedia: Jeffrey Dahmer -- 15 counts in Wisconsin plus "
+        source="Wikipedia: Jeffrey Dahmer – 15 counts in Wisconsin plus "
         "1 in Ohio.",
     ),
     NumericTiebreaker(
@@ -110,7 +99,7 @@ TIEBREAKER_QUESTIONS = (
             "Bundy confess to committing?"
         ),
         answer=30.0,
-        source="Wikipedia: Ted Bundy -- he was legally convicted of only "
+        source="Wikipedia: Ted Bundy – he was legally convicted of only "
         "3; the true total is widely believed to be higher, but 30 is his "
         "own documented confession figure.",
     ),
@@ -121,7 +110,7 @@ TIEBREAKER_QUESTIONS = (
             "between 1963 and 1965?"
         ),
         answer=5.0,
-        source="Wikipedia: Moors murders -- one victim, Keith Bennett, "
+        source="Wikipedia: Moors murders – one victim, Keith Bennett, "
         "has never been found, but is still counted among the 5 known "
         "victims.",
     ),
@@ -140,7 +129,7 @@ TIEBREAKER_QUESTIONS = (
             "axe murders in Iowa on the night of June 9-10, 1912?"
         ),
         answer=8.0,
-        source="Wikipedia: Villisca axe murders -- the 6 Moore family "
+        source="Wikipedia: Villisca axe murders – the 6 Moore family "
         "members plus 2 child houseguests.",
     ),
     NumericTiebreaker(
@@ -150,7 +139,7 @@ TIEBREAKER_QUESTIONS = (
             "1900s New York?"
         ),
         answer=3.0,
-        source="Wikipedia: Mary Mallon -- she's believed to have infected "
+        source="Wikipedia: Mary Mallon – she's believed to have infected "
         "several dozen people total; only 3 of those infections resulted "
         "in confirmed deaths.",
     ),
@@ -161,7 +150,7 @@ TIEBREAKER_QUESTIONS = (
             "Plague of 1665?"
         ),
         answer=68_596.0,
-        source="Wikipedia: Great Plague of London -- the officially "
+        source="Wikipedia: Great Plague of London – the officially "
         "recorded figure; historians believe underreporting means the "
         "true toll was substantially higher.",
     ),
@@ -172,23 +161,23 @@ TIEBREAKER_QUESTIONS = (
             "died?"
         ),
         answer=39.0,
-        source="Wikipedia: Donner Party -- 48 of 87 survived.",
+        source="Wikipedia: Donner Party – 48 of 87 survived.",
     ),
     NumericTiebreaker(
         question="According to Wikipedia, there are at least how many "
         "known species of bat worldwide?",
         answer=1_500.0,
-        source="Wikipedia: Bat -- \"at least 1,500 known species\"; bat "
+        source="Wikipedia: Bat – \"at least 1,500 known species\"; bat "
         "taxonomy is still being refined, and other sources cite "
         "slightly lower figures.",
     ),
     NumericTiebreaker(
         question=(
-            "How many living species of vampire bat -- bats that feed "
-            "solely on blood -- are currently recognized?"
+            "How many living species of vampire bat, bats that feed "
+            "solely on blood, are currently recognized?"
         ),
         answer=3.0,
-        source="Wikipedia: Vampire bat -- the common, hairy-legged, and "
+        source="Wikipedia: Vampire bat – the common, hairy-legged, and "
         "white-winged vampire bats.",
     ),
     NumericTiebreaker(
@@ -198,7 +187,7 @@ TIEBREAKER_QUESTIONS = (
             "Catalog, the standard taxonomic reference for spiders?"
         ),
         answer=53_656.0,
-        source="Wikipedia: World Spider Catalog -- as of January 10, "
+        source="Wikipedia: World Spider Catalog – as of January 10, "
         "2026, after an average discovery rate of three new species per "
         "day.",
     ),
@@ -209,7 +198,7 @@ TIEBREAKER_QUESTIONS = (
             "world?"
         ),
         answer=35.0,
-        source="Wikipedia: Latrodectus -- as of October 2025; the "
+        source="Wikipedia: Latrodectus – as of October 2025; the "
         "taxonomy is actively being revised, with older sources citing "
         "31-34.",
     ),
@@ -220,7 +209,7 @@ TIEBREAKER_QUESTIONS = (
             "extinct ones, are recognized in the order Strigiformes?"
         ),
         answer=254.0,
-        source="Wikipedia: List of owl species -- 5 of the 254 are "
+        source="Wikipedia: List of owl species – 5 of the 254 are "
         "extinct.",
     ),
     NumericTiebreaker(
@@ -235,7 +224,7 @@ TIEBREAKER_QUESTIONS = (
     NumericTiebreaker(
         question=(
             "What is the longest recorded fang length, in millimeters, "
-            "of any venomous snake -- a record held by the Gaboon viper?"
+            "of any venomous snake, a record held by the Gaboon viper?"
         ),
         answer=55.0,
         source="Wikipedia: Gaboon viper.",
@@ -247,7 +236,7 @@ TIEBREAKER_QUESTIONS = (
             "mischief?"
         ),
         answer=1917.0,
-        source="Wikipedia: Trick-or-treating -- first recorded in "
+        source="Wikipedia: Trick-or-treating – first recorded in "
         "Ontario, in the Sault Daily Star, November 1, 1917 (as "
         "\"tricks or treats\").",
     ),
@@ -258,14 +247,14 @@ TIEBREAKER_QUESTIONS = (
             "United States?"
         ),
         answer=1867.0,
-        source="National Geographic, citing historian Cindy Ott -- an "
+        source="National Geographic, citing historian Cindy Ott – an "
         "image in an 1867 issue of Harper's Weekly.",
     ),
     NumericTiebreaker(
         question="In what year was the Ouija board patented in the "
         "United States?",
         answer=1891.0,
-        source="Wikipedia: Ouija -- patent granted February 10, 1891, to "
+        source="Wikipedia: Ouija – patent granted February 10, 1891, to "
         "Elijah Bond.",
     ),
     NumericTiebreaker(
@@ -275,7 +264,7 @@ TIEBREAKER_QUESTIONS = (
             "working prison for how many years before closing in 1971?"
         ),
         answer=142.0,
-        source="Wikipedia: Eastern State Penitentiary -- operational "
+        source="Wikipedia: Eastern State Penitentiary – operational "
         "from 1829 until 1971.",
     ),
     NumericTiebreaker(
@@ -285,7 +274,7 @@ TIEBREAKER_QUESTIONS = (
             "its closure in 1963?"
         ),
         answer=29.0,
-        source="National Park Service -- \"During the subsequent 29 "
+        source="National Park Service – \"During the subsequent 29 "
         "years as a federal penitentiary, Alcatraz held 1500 men.\"",
     ),
     NumericTiebreaker(
@@ -294,7 +283,7 @@ TIEBREAKER_QUESTIONS = (
             "Jose, California, is commonly said to have how many rooms?"
         ),
         answer=160.0,
-        source="Click Americana -- the figure most consistently cited "
+        source="Click Americana – the figure most consistently cited "
         "across sources, though the exact count has long been disputed "
         "since the house was built without a master plan.",
     ),
@@ -311,7 +300,7 @@ TIEBREAKER_QUESTIONS = (
             "into the 206 bones of an adult skeleton?"
         ),
         answer=270.0,
-        source="Wikipedia: Human skeleton -- some popular secondary "
+        source="Wikipedia: Human skeleton – some popular secondary "
         "sources instead cite 300.",
     ),
     NumericTiebreaker(
@@ -322,7 +311,7 @@ TIEBREAKER_QUESTIONS = (
         ),
         answer=1_306.58,
         source="Guinness World Records: Longest fingernails on a pair of "
-        "hands (female) -- Diana Armstrong (USA), verified in "
+        "hands (female) – Diana Armstrong (USA), verified in "
         "Minneapolis, March 13, 2022.",
     ),
     NumericTiebreaker(
@@ -333,7 +322,7 @@ TIEBREAKER_QUESTIONS = (
             "many years?"
         ),
         answer=17.0,
-        source="University of Washington urban wildlife research -- a "
+        source="University of Washington urban wildlife research – a "
         "study led by Professor John Marzluff, begun in 2006.",
     ),
     NumericTiebreaker(
@@ -383,7 +372,7 @@ TIEBREAKER_QUESTIONS = (
             "many pages long is Stephen King's novel It?"
         ),
         answer=1_138.0,
-        source="Wikipedia: It (novel) infobox -- page count is edition-"
+        source="Wikipedia: It (novel) infobox – page count is edition-"
         "specific; later paperback/ebook editions differ.",
     ),
     NumericTiebreaker(
@@ -392,7 +381,7 @@ TIEBREAKER_QUESTIONS = (
             "many pages long is Stephen King's The Shining?"
         ),
         answer=447.0,
-        source="Wikipedia: The Shining (novel) infobox -- page count is "
+        source="Wikipedia: The Shining (novel) infobox – page count is "
         "edition-specific.",
     ),
     NumericTiebreaker(
@@ -407,7 +396,7 @@ TIEBREAKER_QUESTIONS = (
             "to 1997. How many numbered books were in that original run?"
         ),
         answer=62.0,
-        source="Wikipedia: Goosebumps -- refers to the original numbered "
+        source="Wikipedia: Goosebumps – refers to the original numbered "
         "series, not Goosebumps 2000 or later spin-off lines.",
     ),
     NumericTiebreaker(
@@ -432,7 +421,7 @@ TIEBREAKER_QUESTIONS = (
         question="As of October 2026, how many Scream feature films "
         "have been released in theaters?",
         answer=7.0,
-        source="Wikipedia: Scream (franchise) -- time-sensitive; an 8th "
+        source="Wikipedia: Scream (franchise) – time-sensitive; an 8th "
         "film is in early development but unreleased as of this count.",
     ),
     NumericTiebreaker(
@@ -442,7 +431,7 @@ TIEBREAKER_QUESTIONS = (
             "as of October 2026?"
         ),
         answer=9.0,
-        source="Wikipedia: Saw (franchise) -- time-sensitive; an 11th "
+        source="Wikipedia: Saw (franchise) – time-sensitive; an 11th "
         "mainline film was announced but is unreleased as of this count.",
     ),
     NumericTiebreaker(
@@ -481,7 +470,7 @@ TIEBREAKER_QUESTIONS = (
         ),
         answer=35_000_000.0,
         source="Wikipedia: Candy corn, citing a National Confectioners "
-        "Association figure -- an approximate industry figure, not an "
+        "Association figure – an approximate industry figure, not an "
         "annually updated statistic.",
     ),
     NumericTiebreaker(
@@ -491,7 +480,7 @@ TIEBREAKER_QUESTIONS = (
             "year, in dollars?"
         ),
         answer=12_200_000_000.0,
-        source="National Retail Federation, 2023 press release -- a "
+        source="National Retail Federation, 2023 press release – a "
         "record at the time; NRF publishes a new, higher figure most "
         "years, so this is scoped specifically to 2023.",
     ),
@@ -505,3 +494,15 @@ TIEBREAKER_QUESTIONS = (
         source="Wikipedia: Psycho (1960 film) infobox.",
     ),
 )
+"""Hand-picked and fact-checked against the cited source -- unlike every
+other clue in this game (pulled from the Jeopardy dataset, whose own
+accuracy isn't this project's to vouch for), a tiebreaker only ever
+fires live in front of a room with a tied score, so it has to hold up
+to someone looking it up on the spot. One is picked at random each time
+a tiebreaker fires.
+
+A few entries (franchise film counts, the NRF Halloween-spending figure)
+are explicitly scoped to "as of" a date or year rather than phrased as
+eternally true -- re-verify those specific ones before reusing this
+list many years from now, since a sequel or a new survey can move the
+number."""

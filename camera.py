@@ -18,17 +18,17 @@ from pathlib import Path
 import cv2
 
 CAMERA_INDEX = 0
-# Auto-exposure only adapts while frames are being pulled off the camera, so
-# discard a few before the real capture. Raise it with --warmup if a darker
-# scene needs longer to settle.
 CAMERA_WARMUP_SEC = 0.5
-# The camera's continuous autofocus does not reliably lock in the tray's dim,
-# close-range, low-contrast scene: left alone, it settles wherever, and one
-# capture measured 8-10x softer than a fixed focus a few steps away. Sharpness
-# swept sharply peaked and stable at this value with the camera at its current
-# distance from the tray; re-run --sweep-focus and update this if that
-# distance ever changes.
+"""Auto-exposure only adapts while frames are being pulled off the
+camera, so discard a few before the real capture. Raise it with
+--warmup if a darker scene needs longer to settle."""
 CAMERA_FOCUS = 9
+"""The camera's continuous autofocus does not reliably lock in the
+tray's dim, close-range, low-contrast scene: left alone, it settles
+wherever, and one capture measured 8-10x softer than a fixed focus a
+few steps away. Sharpness swept sharply peaked and stable at this value
+with the camera at its current distance from the tray; re-run
+--sweep-focus and update this if that distance ever changes."""
 GENERATED_DIR = Path("generated")
 DEFAULT_OUTPUT = GENERATED_DIR / "captured_item.jpg"
 

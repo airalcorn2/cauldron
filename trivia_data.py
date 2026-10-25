@@ -36,26 +36,28 @@ from google.genai import types
 from voice_generator import VOICES, generate_to_path
 from witches import Witch
 
-# This is a one-night event, not a standing feature -- no need to voice
-# every clue for all three witches (3x the ElevenLabs cost/time for
-# variety nobody will notice across one evening) or to carry the full
-# ~1,300-clue pool (more than a single night's trivia round would ever
-# get through). CLUE_COUNT below samples down to a manageable set;
-# SAMPLE_SEED/WITCH_SEED keep that sample (and each clue's assigned
-# witch) stable across re-runs of this script, so re-running it (e.g.,
-# after adding to excluded_ids.json) doesn't reshuffle the selection and
-# throw away already-synthesized audio. To get a whole new set of
-# questions for another night, leave these alone and pass a new
-# --batch number instead -- see select_clues().
 CLUE_COUNT = 30
+"""This is a one-night event, not a standing feature -- no need to voice
+every clue for all three witches (3x the ElevenLabs cost/time for
+variety nobody will notice across one evening) or to carry the full
+~1,300-clue pool (more than a single night's trivia round would ever get
+through). CLUE_COUNT samples down to a manageable set; SAMPLE_SEED/
+WITCH_SEED below keep that sample (and each clue's assigned witch)
+stable across re-runs of this script, so re-running it (e.g., after
+adding to excluded_ids.json) doesn't reshuffle the selection and throw
+away already-synthesized audio. To get a whole new set of questions for
+another night, leave these alone and pass a new --batch number instead
+-- see select_clues()."""
 SAMPLE_SEED = 0
+"""Paired with WITCH_SEED below -- see CLUE_COUNT above."""
 WITCH_SEED = 1
+"""Paired with SAMPLE_SEED above -- see CLUE_COUNT above."""
 
-# The dataset release to pull -- bump this to pick up newer seasons; it
-# drives every filename/URL below, all of which encode it the dataset's
-# own two different ways ("v42" for the release tag, "1-42" for the
-# archive/file names).
 DATASET_VERSION = 42
+"""The dataset release to pull -- bump this to pick up newer seasons; it
+drives every filename/URL below, all of which encode it the dataset's
+own two different ways ("v42" for the release tag, "1-42" for the
+archive/file names)."""
 _ARCHIVE_NAME = f"jeopardy_dataset_seasons_1-{DATASET_VERSION}"
 
 DATASET_URL = (
@@ -68,21 +70,15 @@ TRIVIA_DIR = Path("trivia")
 RAW_ZIP_PATH = TRIVIA_DIR / "raw" / f"{_ARCHIVE_NAME}.zip"
 TSV_PATH = TRIVIA_DIR / "raw" / f"combined_season1-{DATASET_VERSION}.tsv"
 OUTPUT_PATH = TRIVIA_DIR / "horror_clues.json"
-# Hand-reviewed escape hatch: clue ids to drop even though they matched the
-# keyword filter (e.g., "PITCHES FROM THE CRYPT" is about ad campaigns, not
-# horror -- a pun category the filter can't tell apart from a real one).
-# A plain JSON list of ids; starts out not existing, which is the same as
-# an empty list.
 EXCLUDED_IDS_PATH = TRIVIA_DIR / "excluded_ids.json"
+"""Hand-reviewed escape hatch: clue ids to drop even though they matched
+the keyword filter (e.g., "PITCHES FROM THE CRYPT" is about ad
+campaigns, not horror -- a pun category the filter can't tell apart from
+a real one). A plain JSON list of ids; starts out not existing, which is
+the same as an empty list."""
 
 AUDIO_CACHE_DIR = Path("generated/trivia")
 
-# Primary signal: category names are curator-written and thematically
-# coherent, so matching on the category (rather than the clue/response
-# text, which is noisier -- an unrelated category's clue can mention
-# "ghost" in passing) is precise. Found by actually running this filter
-# against the real dataset and hand-checking the categories it pulled in
-# (1,276 clues across 188 categories) -- not a guessed keyword list.
 INCLUDE_KEYWORDS = (
     "HALLOWEEN",
     "HORROR",
@@ -117,11 +113,12 @@ INCLUDE_KEYWORDS = (
     "CRYPT",
     "POLTERGEIST",
 )
-# Substring collisions the include list above produces on the real data
-# (e.g., "WITCH" inside "SWITCH", "DEMON" inside "DEMONSTRATION") plus a few
-# categories that use a horror word as a pun on something unrelated (the
-# band Vampire Weekend, Monster brand energy drinks). Checked against the
-# actual matched category list, not guessed.
+"""Primary signal: category names are curator-written and thematically
+coherent, so matching on the category (rather than the clue/response
+text, which is noisier -- an unrelated category's clue can mention
+"ghost" in passing) is precise. Found by actually running this filter
+against the real dataset and hand-checking the categories it pulled in
+(1,276 clues across 188 categories) -- not a guessed keyword list."""
 EXCLUDE_KEYWORDS = (
     "SWITCH",
     "TWITCH",
@@ -142,15 +139,20 @@ EXCLUDE_KEYWORDS = (
     "CRYPTO",
     "FANDEMONIUM",
 )
+"""Substring collisions the include list above produces on the real data
+(e.g., "WITCH" inside "SWITCH", "DEMON" inside "DEMONSTRATION") plus a
+few categories that use a horror word as a pun on something unrelated
+(the band Vampire Weekend, Monster brand energy drinks). Checked against
+the actual matched category list, not guessed."""
 _INCLUDE_PATTERN = re.compile("|".join(INCLUDE_KEYWORDS), re.IGNORECASE)
 _EXCLUDE_PATTERN = re.compile("|".join(EXCLUDE_KEYWORDS), re.IGNORECASE)
 
-# Flat per-round point value -- the dataset's raw dollar figures swing
-# wildly across eras (inflation, value increases over the decades) and
-# aren't meaningful as absolute points for a casual game. Round 3 (Final
-# Jeopardy!) is dropped entirely below -- it's wager-based, which this game
-# doesn't model.
 POINTS_BY_ROUND = {"1": 1, "2": 2}
+"""Flat per-round point value -- the dataset's raw dollar figures swing
+wildly across eras (inflation, value increases over the decades) and
+aren't meaningful as absolute points for a casual game. Round 3 (Final
+Jeopardy!) is dropped entirely below -- it's wager-based, which this
+game doesn't model."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,22 +161,22 @@ class Clue:
 
     id: str
     category: str
-    # clue is the clean text -- shown on screen and read to Gemini for
-    # judging. response is the correct response (the dataset's "question"
-    # field).
     clue: str
+    """The clean text -- shown on screen and read to Gemini for
+    judging."""
     response: str
+    """The correct response (the dataset's "question" field)."""
     points: int
-    # Jeopardy! round (1 or 2) -- drives points, and the group page's
-    # "Round N" display.
     round: int
-    # Assigned by select_clues(); empty in the unsampled full pool.
+    """Jeopardy! round (1 or 2) -- drives points, and the group page's
+    "Round N" display."""
     witch: str = ""
-    # Same words as ``clue``, but with ElevenLabs v4 Audio Tags (e.g.,
-    # "[stress on next word]") inserted by _annotate_for_speech() -- fed to
-    # text-to-speech ONLY, never shown on screen or to Gemini's judge.
-    # Empty until that annotation step runs (e.g., under --skip-audio).
+    """Assigned by select_clues(); empty in the unsampled full pool."""
     spoken_clue: str = ""
+    """Same words as ``clue``, but with ElevenLabs v4 Audio Tags (e.g.,
+    "[stress on next word]") inserted by _annotate_for_speech() -- fed to
+    text-to-speech ONLY, never shown on screen or to Gemini's judge.
+    Empty until that annotation step runs (e.g., under --skip-audio)."""
 
 
 def _clean(text: str) -> str:
@@ -199,13 +201,6 @@ def _ensure_terminal_punctuation(text: str) -> str:
     return text if text[-1] in ".?!" else f"{text}."
 
 
-# Marking up clue text with ElevenLabs v4's "Audio Tags" (bracketed
-# delivery cues like "[stress on next word]") for livelier, better-paced
-# TTS -- see trivia_game.py's module docstring for why trivia needs live
-# Gemini access at all; this use of it stays entirely in one-time prep,
-# never in a live round. Its own client/model, same reasoning as
-# trivia_game.py's _GEMINI_CLIENT -- these sibling modules stay free of a
-# dependency on each other.
 _GEMINI_CLIENT = genai.Client(
     http_options=types.HttpOptions(
         # Milliseconds, not seconds.
@@ -219,13 +214,20 @@ _GEMINI_CLIENT = genai.Client(
         ),
     )
 )
+"""Marking up clue text with ElevenLabs v4's "Audio Tags" (bracketed
+delivery cues like "[stress on next word]") for livelier, better-paced
+TTS -- see trivia_game.py's module docstring for why trivia needs live
+Gemini access at all; this use of it stays entirely in one-time prep,
+never in a live round. Its own client/model, same reasoning as
+trivia_game.py's _GEMINI_CLIENT -- these sibling modules stay free of a
+dependency on each other."""
 _GEMINI_MODEL = "gemini-3.8-flash"
-# temperature favors faithful tag insertion over creative rewriting.
 _TAG_CONFIG = types.GenerateContentConfig(
     response_mime_type="application/json",
     temperature=0.2,
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 )
+"""temperature favors faithful tag insertion over creative rewriting."""
 _TAG_PATTERN = re.compile(r"\[[^\]]*\]")
 
 

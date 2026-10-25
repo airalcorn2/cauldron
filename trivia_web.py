@@ -67,22 +67,31 @@ class Server:
     _answers: dict["TeamId", "asyncio.Queue[str]"] = field(
         default_factory=lambda: {1: asyncio.Queue(), 2: asyncio.Queue()}
     )
-    # Which team has already locked in an answer for the *current* active
-    # clue -- a teammate's second phone submitting after that is just
-    # ignored, rather than queued and mistaken for the next clue's answer.
     _answered: set["TeamId"] = field(default_factory=set)
-    # The most recent message of each type -- replayed to a freshly
-    # connected/reconnected socket (see _send_snapshot()) so a reloaded
-    # team or group page catches up to the live round instantly instead of
-    # sitting on "waiting for the next question" until the next broadcast.
+    """Which team has already locked in an answer for the *current*
+    active clue -- a teammate's second phone submitting after that is
+    just ignored, rather than queued and mistaken for the next clue's
+    answer."""
     _last_state: dict | None = None
+    """The most recent message of each type (this field and the ones
+    below it) -- replayed to a freshly connected/reconnected socket (see
+    _send_snapshot()) so a reloaded team or group page catches up to the
+    live round instantly instead of sitting on "waiting for the next
+    question" until the next broadcast."""
     _last_prompt: dict | None = None
+    """See _last_state above."""
     _last_timer: dict | None = None
+    """See _last_state above."""
     _last_result: dict | None = None
+    """See _last_state above."""
     _last_end: dict | None = None
+    """See _last_state above."""
     _last_tiebreaker: dict | None = None
+    """See _last_state above."""
     _last_tiebreaker_result: dict | None = None
+    """See _last_state above."""
     _last_submitted: dict | None = None
+    """See _last_state above."""
     _last_finale: dict | None = None
 
     async def _broadcast(self, message: dict) -> None:

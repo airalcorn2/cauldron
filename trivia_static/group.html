@@ -281,7 +281,7 @@ ws.onmessage = (event) => {
   } else if (data.type === "submitted") {
     if (data.stop_timer) {
       stopTimer();
-      turnEl.textContent = `✓ ${teamNames[data.team]}'s answer is locked in -- the witches are judging...`;
+      turnEl.textContent = `✓ ${teamNames[data.team]}'s answer is locked in – the witches are judging...`;
     } else {
       // Sudden death: both teams share one clock, so the other team
       // might still be deciding -- don't stop it, just note who's in.
@@ -295,7 +295,7 @@ ws.onmessage = (event) => {
     const g1 = data.guess_1 ?? "no guess";
     const g2 = data.guess_2 ?? "no guess";
     resultEl.textContent =
-      `The real answer: ${data.answer} (${data.source}) -- ` +
+      `The real answer: ${data.answer} (${data.source}) – ` +
       `${teamNames["1"]} guessed ${g1}, ${teamNames["2"]} guessed ${g2}. ` +
       `${teamNames[data.winner]} wins!`;
     resultEl.className = "correct";

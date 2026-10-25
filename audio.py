@@ -23,57 +23,61 @@ import pygame
 
 from witches import WITCHES, Witch
 
-# The 3.5mm jack. ALSA's bare "default" device is unreliable on this Pi --
-# with the HDMI outputs and the USB webcam's audio both also present as sound
-# cards, it can resolve to one of those instead, which fails to open.
 ALSA_DEVICE = "plughw:Headphones,0"
+"""The 3.5mm jack. ALSA's bare "default" device is unreliable on this Pi
+-- with the HDMI outputs and the USB webcam's audio both also present as
+sound cards, it can resolve to one of those instead, which fails to
+open."""
 
 ASSETS_DIR = Path("assets")
-# Where voice_generator.py writes <witch>.mp3.
 GENERATED_DIR = Path("generated")
-# Bubbling sound effect from Pixabay:
-# https://pixabay.com/sound-effects/household-cauldron-boiling-173607/
+"""Where voice_generator.py writes <witch>.mp3."""
 BUBBLE_SFX_PATH = ASSETS_DIR / "bubbling.wav"
-# Witch laughing sound effect from Pixabay:
-# https://pixabay.com/sound-effects/people-witch-laugh-28961/
+"""Bubbling sound effect from Pixabay:
+https://pixabay.com/sound-effects/household-cauldron-boiling-173607/"""
 LAUGH_SFX_PATH = ASSETS_DIR / "witch-laugh.wav"
-# Water splash sound effect from Pixabay:
-# https://pixabay.com/sound-effects/film-special-effects-water-splash-229315/
+"""Witch laughing sound effect from Pixabay:
+https://pixabay.com/sound-effects/people-witch-laugh-28961/"""
 _SPLASH_SOURCE_PATH = ASSETS_DIR / "splash.mp3"
-# Volume-scaled .wav copy of the above, rendered once by setup() (see
-# _ensure_splash_audio()) -- aplay (used for .wav playback, see
-# play_file()) has no live volume flag the way mpg123's -f does, so
-# matching SPLASH_VOLUME means baking it into the file itself. Playing a
-# .wav through aplay instead of the source .mp3 through mpg123 also cuts
-# per-call startup latency a lot on this hardware (benchmarked: ~0.12s vs
-# ~0.4s for a clip this short) -- worth it for a cue meant to land the
-# instant something drops in, unlike a multi-second voice line where the
-# difference wouldn't register.
+"""Water splash sound effect from Pixabay:
+https://pixabay.com/sound-effects/film-special-effects-water-splash-229315/"""
 SPLASH_SFX_PATH = GENERATED_DIR / "_splash.wav"
+"""Volume-scaled .wav copy of _SPLASH_SOURCE_PATH, rendered once by
+setup() (see _ensure_splash_audio()) -- aplay (used for .wav playback,
+see play_file()) has no live volume flag the way mpg123's -f does, so
+matching SPLASH_VOLUME means baking it into the file itself. Playing a
+.wav through aplay instead of the source .mp3 through mpg123 also cuts
+per-call startup latency a lot on this hardware (benchmarked: ~0.12s vs
+~0.4s for a clip this short) -- worth it for a cue meant to land the
+instant something drops in, unlike a multi-second voice line where the
+difference wouldn't register."""
 
-# Relative volumes (0.0-1.0) for the two ambience loops. pygame can only scale
-# a Sound down, never up, so the laugh -- measured at roughly 7x bubbling's
-# RMS level in the source files -- is turned way down rather than trying to
-# boost bubbling past its natural volume. Tune with --bubble-volume/
-# --laugh-volume on the --ambience test below rather than guessing blind.
 BUBBLE_VOLUME: float = 1.0
+"""Relative volume (0.0-1.0) for the bubbling ambience loop, paired with
+LAUGH_VOLUME below. pygame can only scale a Sound down, never up, so the
+laugh -- measured at roughly 7x bubbling's RMS level in the source files
+-- is turned way down rather than trying to boost bubbling past its
+natural volume. Tune with --bubble-volume/--laugh-volume on the
+--ambience test below rather than guessing blind."""
 LAUGH_VOLUME: float = 0.3
-# Medium bubbling level -- for cauldron_controller's idle ambience (just a
-# background fireplace-like presence while the rainbow chases, not the
-# "something's brewing" cue used while actually waiting on an API call, so
-# no laugh plays alongside it either -- see start_bubbling()'s ``laugh``).
+"""Relative volume (0.0-1.0) for the laugh ambience loop -- see
+BUBBLE_VOLUME above."""
 IDLE_BUBBLE_VOLUME: float = 0.55
-# trivia_game.py's (and others') answer/drop-splash cue. Baked into
-# SPLASH_SFX_PATH by _ensure_splash_audio(), not applied at play time --
-# unlike VOICE_VOLUME/WITCH_VOLUMES, which are live mpg123 -f scales.
+"""Medium bubbling level -- for cauldron_controller's idle ambience (just
+a background fireplace-like presence while the rainbow chases, not the
+"something's brewing" cue used while actually waiting on an API call, so
+no laugh plays alongside it either -- see start_bubbling()'s ``laugh``)."""
 SPLASH_VOLUME: float = 0.6
+"""trivia_game.py's (and others') answer/drop-splash cue. Baked into
+SPLASH_SFX_PATH by _ensure_splash_audio(), not applied at play time --
+unlike VOICE_VOLUME/WITCH_VOLUMES, which are live mpg123 -f scales."""
 
-# Default witch-line (TTS) playback volume, used by the CLI test below when
-# no specific witch is given. The live show instead uses WITCH_VOLUMES, so
-# each witch can be balanced independently -- some voices render quieter than
-# others at the same ElevenLabs settings. Applied via mpg123's -f scale
-# (32768 = full volume); see play_file().
 VOICE_VOLUME: float = 0.3
+"""Default witch-line (TTS) playback volume, used by the CLI test below
+when no specific witch is given. The live show instead uses
+WITCH_VOLUMES, so each witch can be balanced independently -- some
+voices render quieter than others at the same ElevenLabs settings.
+Applied via mpg123's -f scale (32768 = full volume); see play_file()."""
 
 WITCH_VOLUMES: dict[Witch, float] = {w: p.volume for w, p in WITCHES.items()}
 

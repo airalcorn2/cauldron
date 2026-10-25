@@ -66,36 +66,30 @@ Phase = Literal["primary", "steal"]
 
 GAME_TITLE = "The Cauldron of Knowledge"
 
-# 1 is pumpkin orange, 2 is Broomstick purple.
 TEAM_COLORS: dict[TeamId, light_control.RGB] = {
     1: light_control.RGB(255, 100, 0),
     2: light_control.RGB(150, 30, 220),
 }
+"""1 is pumpkin orange, 2 is Broomstick purple."""
 TEAM_NAMES: dict[TeamId, str] = {
     1: "Team Tarot",
     2: "Team Broomstick",
 }
 
-# Untimed trivia with a live crowd stalls; a timeout is treated exactly
-# like a wrong (empty) answer (see judge_answer()).
 ANSWER_TIMEOUT_SEC = 120.0
-# How long before the deadline the reading witch calls out a warning (see
-# WARNING_LINES) -- must stay comfortably under ANSWER_TIMEOUT_SEC.
+"""Untimed trivia with a live crowd stalls; a timeout is treated exactly
+like a wrong (empty) answer (see judge_answer())."""
 WARNING_LEAD_SEC = 10.0
-# Subtracted on top of WARNING_LEAD_SEC when scheduling the warning (see
-# _speak_warning()) -- play_file() still has to spawn mpg123/aplay and open
-# the ALSA device before anything's actually audible, even with the file
-# already cached, so firing right at the WARNING_LEAD_SEC mark lands the
-# audible warning a little after it. Found by feel, not measured exactly.
+"""How long before the deadline the reading witch calls out a warning
+(see WARNING_LINES) -- must stay comfortably under ANSWER_TIMEOUT_SEC."""
 WARNING_PLAYBACK_LEAD_SEC = 1.0
+"""Subtracted on top of WARNING_LEAD_SEC when scheduling the warning
+(see _speak_warning()) -- play_file() still has to spawn mpg123/aplay
+and open the ALSA device before anything's actually audible, even with
+the file already cached, so firing right at the WARNING_LEAD_SEC mark
+lands the audible warning a little after it. Found by feel, not
+measured exactly."""
 
-# Judging and banter are one Gemini call -- see judge_answer(). Mirrors
-# spell_generator.py's client setup (retry on the vision model's occasional
-# 503s, timeout per attempt rather than hanging the round) but kept as its
-# own client/model here rather than imported from spell_generator, so
-# trivia's modules stay free of any dependency on the main show (same
-# reasoning as duplicating button indices instead of importing
-# cauldron_controller -- see _FACE_COLORS in potion_play.py, for instance).
 _GEMINI_CLIENT = genai.Client(
     http_options=types.HttpOptions(
         # Milliseconds, not seconds.
@@ -109,32 +103,29 @@ _GEMINI_CLIENT = genai.Client(
         ),
     )
 )
+"""Judging and banter are one Gemini call -- see judge_answer(). Mirrors
+spell_generator.py's client setup (retry on the vision model's
+occasional 503s, timeout per attempt rather than hanging the round) but
+kept as its own client/model here rather than imported from
+spell_generator, so trivia's modules stay free of any dependency on the
+main show (same reasoning as duplicating button indices instead of
+importing cauldron_controller -- see _FACE_COLORS in potion_play.py,
+for instance)."""
 _GEMINI_MODEL = "gemini-3.8-flash"
-# temperature leaves room for banter variety; the judging half of the
-# prompt is explicit enough not to need a cooler temperature too.
 _JUDGE_CONFIG = types.GenerateContentConfig(
     response_mime_type="application/json",
     temperature=0.9,
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 )
+"""temperature leaves room for banter variety; the judging half of the
+prompt is explicit enough not to need a cooler temperature too."""
 
-# Overwritten fresh for every judged answer -- unlike clue audio, there's
-# nothing to cache here since the text is different every time.
 _BANTER_AUDIO_PATH = AUDIO_CACHE_DIR / "_banter.mp3"
+"""Overwritten fresh for every judged answer -- unlike clue audio,
+there's nothing to cache here since the text is different every time."""
 
-# A steal reopens the SAME clue for the other team -- re-reading the whole
-# question again would be tedious and sounds like a mistake, so the witch
-# announces the steal chance instead (the clue/category stay up on the
-# group screen throughout, so nothing's actually lost).
-#
-# Hand-written (not Gemini-generated), so ElevenLabs v4 Audio Tags are just
-# inserted directly -- no fidelity check needed like judge_answer()'s, since
-# we're the ones who wrote the words. The only variable is the team name,
-# which is always one of exactly two values, so every (witch, team, line)
-# combination is pre-synthesized once by ensure_line_cache() rather than
-# calling ElevenLabs live for these moments -- see that function.
 STEAL_LINES = (
-    "[dramatic pause] {team}, the cauldron bubbles with a second chance -- "
+    "[dramatic pause] {team}, the cauldron bubbles with a second chance, "
     "[excited] steal it!",
     "[ominous] A missed spell leaves an opening... [excited] {team}, it's "
     "yours to steal!",
@@ -143,15 +134,27 @@ STEAL_LINES = (
     "[excited] Fortune turns! [stress on next word] {team}, the steal is "
     "yours for the taking.",
 )
+"""A steal reopens the SAME clue for the other team -- re-reading the
+whole question again would be tedious and sounds like a mistake, so the
+witch announces the steal chance instead (the clue/category stay up on
+the group screen throughout, so nothing's actually lost).
 
-# Called out by the same witch who read the clue, WARNING_LEAD_SEC before
-# the answer clock runs out -- same hand-written/pre-cached reasoning as
-# STEAL_LINES above.
+Hand-written (not Gemini-generated), so ElevenLabs v4 Audio Tags are
+just inserted directly -- no fidelity check needed like
+judge_answer()'s, since we're the ones who wrote the words. The only
+variable is the team name, which is always one of exactly two values,
+so every (witch, team, line) combination is pre-synthesized once by
+ensure_line_cache() rather than calling ElevenLabs live for these
+moments -- see that function."""
+
 WARNING_LINES = (
-    "[urgent] Ten seconds, {team} -- the cauldron grows impatient!",
+    "[urgent] Ten seconds, {team}, the cauldron grows impatient!",
     "[dramatic pause] Tick, tock... [urgent] ten seconds left, {team}!",
-    "[stress on next word] Hurry, {team} -- only ten seconds remain!",
+    "[stress on next word] Hurry, {team}, only ten seconds remain!",
 )
+"""Called out by the same witch who read the clue, WARNING_LEAD_SEC
+before the answer clock runs out -- same hand-written/pre-cached
+reasoning as STEAL_LINES above."""
 
 
 def _steal_audio_path(witch: Witch, team: TeamId, index: int) -> Path:
@@ -198,12 +201,13 @@ async def ensure_line_cache() -> None:
         await generate_to_path(text, VOICES[witch], path)
 
 
-# Checking a Gemini-written Audio Tag rewrite actually kept the same words
-# (see judge_answer()) -- duplicated from trivia_data.py's identical check
-# rather than cross-imported, same reasoning as duplicating button indices
-# instead of importing cauldron_controller elsewhere in this project: these
-# sibling trivia modules stay free of a dependency on each other.
 _TAG_PATTERN = re.compile(r"\[[^\]]*\]")
+"""Checking a Gemini-written Audio Tag rewrite actually kept the same
+words (see judge_answer()) -- duplicated from trivia_data.py's identical
+check rather than cross-imported, same reasoning as duplicating button
+indices instead of importing cauldron_controller elsewhere in this
+project: these sibling trivia modules stay free of a dependency on each
+other."""
 
 
 def _strip_tags(text: str) -> str:
@@ -220,11 +224,12 @@ class Verdict:
     in-character reaction to it -- see judge_answer()."""
 
     correct: bool
-    # Clean text -- shown on screen, never contains Audio Tags.
     banter: str
-    # Same words as ``banter``, but with ElevenLabs v4 Audio Tags inserted
-    # for delivery -- fed to text-to-speech only, never displayed.
+    """Clean text -- shown on screen, never contains Audio Tags."""
     spoken_banter: str
+    """Same words as ``banter``, but with ElevenLabs v4 Audio Tags
+    inserted for delivery -- fed to text-to-speech only, never
+    displayed."""
 
 
 def _judge_prompt(
@@ -542,8 +547,10 @@ class ClueOutcome:
 
     category: str
     points: int
-    scorer: TeamId | None  # None if nobody got it right.
-    stolen: bool  # True if scorer won it on a steal attempt, not primary.
+    scorer: TeamId | None
+    """None if nobody got it right."""
+    stolen: bool
+    """True if scorer won it on a steal attempt, not primary."""
 
 
 @dataclass
@@ -554,19 +561,19 @@ class TriviaState:
     directly testable function."""
 
     team_scores: dict[TeamId, int] = field(default_factory=lambda: {1: 0, 2: 0})
-    # Who holds the *primary* attempt this round.
     current_team: TeamId = 1
+    """Who holds the *primary* attempt this round."""
     phase: Phase = "primary"
     active_clue: Clue | None = None
     remaining: list[Clue] = field(default_factory=list)
     asked: list[Clue] = field(default_factory=list)
     outcomes: list[ClueOutcome] = field(default_factory=list)
-    # Set once at construction (see run()) -- the main pool's size, for
-    # the group/team screens' "question N of total_clues" display.
-    # len(asked) + 1 is the active clue's own position in that count
-    # (steal re-attempts don't advance it -- asked only grows once a
-    # clue is fully resolved, see submit_answer()).
     total_clues: int = 0
+    """Set once at construction (see run()) -- the main pool's size, for
+    the group/team screens' "question N of total_clues" display.
+    len(asked) + 1 is the active clue's own position in that count (steal
+    re-attempts don't advance it -- asked only grows once a clue is
+    fully resolved, see submit_answer())."""
 
 
 def current_answerer(state: TriviaState) -> TeamId:

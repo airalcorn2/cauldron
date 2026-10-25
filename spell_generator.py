@@ -41,10 +41,6 @@ from google.genai import types
 import prompts
 from witches import Witch
 
-# Vision requests draw occasional 503s when the model is busy, so retry with
-# backoff rather than dropping to the pre-recorded spell on the first blip; the
-# bubbling SFX and LED strobe cover the wait. The timeout is per attempt, so a
-# stalled connection is cut loose and retried instead of hanging the show.
 CLIENT = genai.Client(
     http_options=types.HttpOptions(
         # Milliseconds, not seconds.
@@ -58,44 +54,52 @@ CLIENT = genai.Client(
         ),
     )
 )
+"""Vision requests draw occasional 503s when the model is busy, so retry
+with backoff rather than dropping to the pre-recorded spell on the first
+blip; the bubbling SFX and LED strobe cover the wait. The timeout is per
+attempt, so a stalled connection is cut loose and retried instead of
+hanging the show."""
 MODEL = "gemini-3.8-flash"
 
-# No tools are passed, so AFC is disabled to silence the SDK warning. The
-# creative calls (spells, recipes) run hot for variety; tray evaluation runs
-# cool for accuracy.
 _CREATIVE_CONFIG = types.GenerateContentConfig(
     response_mime_type="application/json",
     temperature=1.4,
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 )
+"""No tools are passed, so AFC is disabled to silence the SDK warning. The
+creative calls (spells, recipes) run hot for variety; tray evaluation runs
+cool for accuracy."""
 _PRECISE_CONFIG = types.GenerateContentConfig(
     response_mime_type="application/json",
     temperature=0.3,
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
 )
+"""See _CREATIVE_CONFIG above."""
 
-# Request-mode ingredients are sampled from this curated pool rather than
-# invented by the model: it keeps successive rounds from converging on the
-# same few objects, and keeps every item sized to actually fit through the
-# drop chute (~5" diameter), neither of which the model reliably got right
-# on its own. See items.txt.
 _ITEMS_PATH = Path("items.txt")
+"""Request-mode ingredients are sampled from this curated pool rather than
+invented by the model: it keeps successive rounds from converging on the
+same few objects, and keeps every item sized to actually fit through the
+drop chute (~5" diameter), neither of which the model reliably got right
+on its own. See items.txt."""
 _ITEMS: tuple[str, ...] = tuple(
     line.strip()
     for line in _ITEMS_PATH.read_text().splitlines()
     if line.strip()
 )
+"""See _ITEMS_PATH above."""
 
-# Category-mode challenges are sampled from this pool for the same reason
-# request-mode ingredients are: keeps successive rounds varied. Each line
-# completes "something ___", e.g., "round" -> "something round". See
-# categories.txt.
 _CATEGORIES_PATH = Path("categories.txt")
+"""Category-mode challenges are sampled from this pool for the same reason
+request-mode ingredients are: keeps successive rounds varied. Each line
+completes "something ___", e.g., "round" -> "something round". See
+categories.txt."""
 _CATEGORIES: tuple[str, ...] = tuple(
     line.strip()
     for line in _CATEGORIES_PATH.read_text().splitlines()
     if line.strip()
 )
+"""See _CATEGORIES_PATH above."""
 
 
 class RequestStyle(StrEnum):
@@ -108,11 +112,12 @@ class RequestStyle(StrEnum):
 class Outcome(StrEnum):
     """The verdict on a collection attempt."""
 
-    # SUCCESS: every requested ingredient is present. PARTIAL: some present,
-    # some missing. FAILURE: none of the requested ingredients are present.
     SUCCESS = "success"
+    """Every requested ingredient is present."""
     PARTIAL = "partial"
+    """Some requested ingredients are present, some missing."""
     FAILURE = "failure"
+    """None of the requested ingredients are present."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -151,12 +156,12 @@ class Spell:
 class Ingredient:
     """One object the witches want fetched."""
 
-    # prompt is what the witches say aloud: a plain request or a riddle.
-    # answer is the literal object, e.g., "a red leaf". match_terms are
-    # lowercased keywords for the tray matcher.
     prompt: str
+    """What the witches say aloud: a plain request or a riddle."""
     answer: str
+    """The literal object, e.g., "a red leaf"."""
     match_terms: tuple[str, ...]
+    """Lowercased keywords for the tray matcher."""
     style: RequestStyle
 
     @classmethod
@@ -246,8 +251,8 @@ class RoundResult:
 class Challenge:
     """Category mode: a property to satisfy, plus the witch lines that ask for it."""
 
-    # Completes "something ___", e.g., "round".
     category: str
+    """Completes "something ___", e.g., "round"."""
     lines: dict[Witch, str]
     order: tuple[Witch, ...] = tuple(Witch)
 
@@ -281,10 +286,10 @@ class CategoryOutcome:
 
     challenge: Challenge
     satisfied: bool
-    # matching_item is which item satisfied it, if any; items_seen is
-    # everything visible, for the reaction spell.
     matching_item: str | None
+    """Which item satisfied the challenge, if any."""
     items_seen: tuple[str, ...]
+    """Everything visible in the tray, for the reaction spell."""
 
 
 def _generate_json(
@@ -492,7 +497,6 @@ def generate_category_outcome_spell(result: CategoryOutcome) -> Spell:
     )
 
 
-# Pre-written challenges for when category_challenge() cannot reach the API.
 FALLBACK_CHALLENGES: tuple[Challenge, ...] = (
     Challenge(
         category="round",
@@ -519,6 +523,7 @@ FALLBACK_CHALLENGES: tuple[Challenge, ...] = (
         },
     ),
 )
+"""Pre-written challenges for when category_challenge() cannot reach the API."""
 
 
 def random_fallback_challenge() -> Challenge:
@@ -526,7 +531,6 @@ def random_fallback_challenge() -> Challenge:
     return random.choice(FALLBACK_CHALLENGES)
 
 
-# Pre-written recipes for when request_recipe() cannot reach the API.
 FALLBACK_RECIPES: tuple[Recipe, ...] = (
     Recipe(
         ingredients=(
@@ -592,6 +596,7 @@ FALLBACK_RECIPES: tuple[Recipe, ...] = (
         },
     ),
 )
+"""Pre-written recipes for when request_recipe() cannot reach the API."""
 
 
 def random_fallback_recipe() -> Recipe:

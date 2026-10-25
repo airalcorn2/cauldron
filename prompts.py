@@ -21,30 +21,30 @@ def _join_and(items: list[str]) -> str:
     return ", ".join(items[:-1]) + f", and {items[-1]}"
 
 
-# Built from the WITCHES registry rather than spelled out, so adding or
-# editing a witch there is all it takes to update the prompts.
 _WITCHES = (
     f"the {_COUNT_WORDS[len(WITCHES)]} eerie, theatrical Halloween witches: "
     + _join_and([f"{p.name} ({p.personality})" for p in WITCHES.values()])
 )
+"""Built from the WITCHES registry rather than spelled out, so adding or
+editing a witch there is all it takes to update the prompts."""
 
 _RETURN_JSON = (
     "Return ONLY a valid JSON object in this exact format, with no extra text:"
 )
 
-# The rig itself shows up in every tray photo: duct tape holds the capture
-# tray together, and white fluff from the cauldron's own stuffing sometimes
-# falls in. Neither is something the mortal dropped, so every prompt that
-# looks at the photo needs to be told to disregard them.
 _IGNORE_RIG_NOISE = (
     "Ignore the duct tape holding the capture tray together and any white "
     "fluff that falls in from the cauldron's own stuffing -- neither is "
     "something the mortal dropped in."
 )
+"""The rig itself shows up in every tray photo: duct tape holds the
+capture tray together, and white fluff from the cauldron's own stuffing
+sometimes falls in. Neither is something the mortal dropped, so every
+prompt that looks at the photo needs to be told to disregard them."""
 
-# Built from Witch rather than spelled out, so the reply shapes never drift
-# from the actual set of witches.
 _SPELL_SHAPE = "{" + ", ".join(f'"{w}": "..."' for w in Witch) + "}"
+"""Built from Witch rather than spelled out, so the reply shapes never
+drift from the actual set of witches."""
 
 _RECIPE_SHAPE = f"""{{
   "ingredients": [

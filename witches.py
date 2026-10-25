@@ -38,78 +38,88 @@ class WitchProfile:
     voice_generator.VoiceSettings, which these become, for what each one does.
     """
 
-    # name is the display name, e.g., "Violet". personality is a short
-    # phrase folded into the Gemini prompts.
     name: str
+    """The display name, e.g., "Violet"."""
     personality: str
-    # This witch's LED color, as plain (r, g, b) values rather than
-    # light_control.py's RGB type, so this module stays free of any hardware
-    # dependency; light_control.py wraps this into its own RGB object.
+    """A short phrase folded into the Gemini prompts."""
     color: tuple[int, int, int]
-    # voice_id is the premium ElevenLabs voice, used by the live show.
-    # free_voice_id is the free-tier voice, used by tests and --once.
+    """This witch's LED color, as plain (r, g, b) values rather than
+    light_control.py's RGB type, so this module stays free of any
+    hardware dependency; light_control.py wraps this into its own RGB
+    object."""
     voice_id: str
+    """The premium ElevenLabs voice, used by the live show."""
     free_voice_id: str
-    # ElevenLabs delivery controls, plain rather than a voice_generator.
-    # VoiceSettings object so this module stays free of any ElevenLabs API
-    # dependency; voice_generator.py wraps these into its own VoiceSettings.
+    """The free-tier voice, used by tests and --once."""
     stability: float
+    """ElevenLabs delivery control, plain rather than a
+    voice_generator.VoiceSettings object so this module stays free of any
+    ElevenLabs API dependency; voice_generator.py wraps this (paired with
+    similarity_boost below) into its own VoiceSettings."""
     similarity_boost: float
-    # Hand-written mode-select dialogue (see cauldron_controller.py's
-    # _run_mode_selection()): one line asking the mortal to pick a mode,
-    # one line per mode naming that mode's button (keyed by mode name --
-    # "react", "story", "joke", "prophecy", "request", "category"), and one
-    # confirmation line per mode. All cached to disk and never generated
-    # live, so opening mode selection never has to wait on the network.
+    """ElevenLabs delivery control paired with stability above -- see
+    there."""
     mode_select_intro: str
+    """Hand-written mode-select dialogue (see cauldron_controller.py's
+    _run_mode_selection()): one line asking the mortal to pick a mode.
+    Cached to disk and never generated live, so opening mode selection
+    never has to wait on the network."""
     mode_select_options: dict[str, str]
+    """One line per mode naming that mode's button (keyed by mode name --
+    "react", "story", "joke", "prophecy", "request", "category", "brew",
+    "play"). Also cached, never generated live."""
     mode_select_confirmations: dict[str, str]
-    # Hand-written lines for the "brew" mini-game's outcome (see
-    # brew_game.py / cauldron_controller.process_brew_game()), spoken by
-    # whichever witch asked the mode-select question. Also cached, never
-    # generated live -- there's no photo to react to, so a vision-model
-    # spell doesn't apply here.
+    """One confirmation line per mode, same keys as
+    mode_select_options. Also cached, never generated live."""
     brew_victory: str
+    """Hand-written line for the "brew" mini-game's victory outcome (see
+    brew_game.py / cauldron_controller.process_brew_game()), spoken by
+    whichever witch asked the mode-select question. Also cached, never
+    generated live -- there's no photo to react to, so a vision-model
+    spell doesn't apply here."""
     brew_failure: str
-    # Hand-written lines for the "play" mini-mode (see potion_play.py):
-    # one per ingredient (keyed "{color}_{index}", 6 each for blue/red/
-    # yellow/green -- a shared name list wrapped in this witch's own
-    # phrasing, not independently written per witch), one per heat level
-    # (3, index 0-2, none/medium/vigorous), one for stirring (either talon
-    # -- direction isn't narrated, just the gesture), and one each for the
-    # two special ingredients (D-pad left/right): a rainbow (floods every
-    # pixel at once) and a comet (sweeps around, clearing tint as it
-    # passes). Also cached, never generated live.
+    """Hand-written line for the "brew" mini-game's failure outcome --
+    see brew_victory above."""
     potion_ingredients: dict[str, str]
+    """Hand-written lines for the "play" mini-mode (see potion_play.py):
+    one per ingredient, keyed "{color}_{index}", 6 each for blue/red/
+    yellow/green -- a shared name list wrapped in this witch's own
+    phrasing, not independently written per witch. Also cached, never
+    generated live."""
     potion_heat: list[str]
+    """One line per heat level (3, index 0-2, none/medium/vigorous). See
+    potion_ingredients above."""
     potion_stir: str
+    """One line for stirring (either talon -- direction isn't narrated,
+    just the gesture). See potion_ingredients above."""
     potion_rainbow: str
+    """One line for the rainbow special ingredient (D-pad left, floods
+    every pixel at once). See potion_ingredients above."""
     potion_comet: str
-    # Hand-written lines for the Hex Hollow Godot game's real-cauldron
-    # bridge (see game_bridge.py): one announcement per ingredient, keyed
-    # by that game's own ingredient id ("mushroom", "pumpkin", "skull",
-    # "feather", "essence", "moonflower"), plus one victory incantation
-    # spoken once all six have been deposited. Also cached, never
-    # generated live -- same reasoning as potion_ingredients above.
+    """One line for the comet special ingredient (D-pad right, sweeps
+    around, clearing tint as it passes). See potion_ingredients above."""
     hollow_ingredients: dict[str, str]
+    """Hand-written lines for the Hex Hollow Godot game's real-cauldron
+    bridge (see game_bridge.py): one announcement per ingredient, keyed
+    by that game's own ingredient id ("mushroom", "pumpkin", "skull",
+    "feather", "essence", "moonflower"). Also cached, never generated
+    live -- same reasoning as potion_ingredients above."""
     hollow_victory: str
+    """Victory incantation spoken once all six hollow_ingredients have
+    been deposited. See hollow_ingredients above."""
     use_speaker_boost: bool = True
-    # Per-witch playback volume, since some voices render quieter than others
-    # at the same ElevenLabs settings. Not capped at 1.0 -- audio.py applies
-    # this as a real amplification factor on mpg123's decoder, so values
-    # above 1 genuinely boost past the source's original level (at the risk
-    # of clipping/distortion if pushed too far). audio.py reads this via its
-    # own WITCH_VOLUMES, the same way light_control.py reads color via
-    # WITCH_COLORS. Tune with `audio.py --role <witch> --voice-volume` to A/B
-    # a value before setting it here.
+    """ElevenLabs delivery control -- see the class docstring."""
     volume: float = 0.3
+    """Per-witch playback volume, since some voices render quieter than
+    others at the same ElevenLabs settings. Not capped at 1.0 -- audio.py
+    applies this as a real amplification factor on mpg123's decoder, so
+    values above 1 genuinely boost past the source's original level (at
+    the risk of clipping/distortion if pushed too far). audio.py reads
+    this via its own WITCH_VOLUMES, the same way light_control.py reads
+    color via WITCH_COLORS. Tune with `audio.py --role <witch>
+    --voice-volume` to A/B a value before setting it here."""
 
 
-# The single source of truth for every witch. To add, remove, or restyle a
-# witch, edit this dict (and the Witch enum above); light_control.py's
-# WITCH_COLORS, voice_generator.py's VOICES/FREE_VOICES, audio.py's
-# WITCH_VOLUMES, prompts.py's persona text, and cauldron_controller.py's
-# MODE_SELECT_INTROS/OPTIONS/CONFIRMATIONS are all derived from it.
 WITCHES: dict[Witch, WitchProfile] = {
     Witch.VIOLET: WitchProfile(
         name="Violet",
@@ -358,3 +368,8 @@ WITCHES: dict[Witch, WitchProfile] = {
         volume=1.5,
     ),
 }
+"""The single source of truth for every witch. To add, remove, or restyle
+a witch, edit this dict (and the Witch enum above); light_control.py's
+WITCH_COLORS, voice_generator.py's VOICES/FREE_VOICES, audio.py's
+WITCH_VOLUMES, prompts.py's persona text, and cauldron_controller.py's
+MODE_SELECT_INTROS/OPTIONS/CONFIRMATIONS are all derived from it."""
