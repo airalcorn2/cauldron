@@ -50,6 +50,21 @@ To iterate on the keyword filter itself (in `trivia_data.py`'s `INCLUDE_KEYWORDS
 .venv/bin/python trivia_data.py --skip-audio
 ```
 
+### A Kid-Friendly Question Bank
+
+For a kids' crowd, run `trivia_kids.py` instead of `trivia_data.py`:
+
+```bash
+.venv/bin/python trivia_kids.py
+```
+
+Rather than filtering the Jeopardy dataset, this generates original Halloween/monster trivia with Gemini, aimed at roughly ages 6-10 and kept to trick-or-treat-friendly topics (pumpkins, costumes, candy, friendly monsters) rather than anything genuinely scary or gory.
+It writes to the exact same `trivia/horror_clues.json` and `generated/trivia/` that `trivia_data.py` does, so this is a drop-in swap -- `trivia_game.py` doesn't change either way, and running `trivia_data.py` again later switches back to the adult bank.
+Pass `--count` to change how many questions it generates (24 by default, split evenly across the two rounds), or `--skip-audio` to iterate on the generation prompt without waiting on ElevenLabs each time, same as `trivia_data.py`'s own flag.
+
+There's no `excluded_ids.json`-style review step here -- these questions aren't pulled from a vetted dataset, they're freshly invented each run, so give `trivia/horror_clues.json` a skim for accuracy and appropriateness before the party rather than assuming it's already been checked.
+There's also no `--batch` equivalent: just re-run the script for an entirely new set, since nothing here is seeded for reproducibility.
+
 ## Hosting a Round
 
 Unlike the data-prep step above, this part does need live network access -- every answer is graded by Gemini as it comes in (see the README's Trivia section), not checked locally, so the Pi needs a working internet connection for the whole round, not just ahead of time.
