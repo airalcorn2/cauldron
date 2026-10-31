@@ -1,6 +1,10 @@
 # Interactive Halloween Cauldron
 
-[![Demo](demo.png)](https://www.instagram.com/p/Dd9_cGcqTMs/)
+[![Demo](assets/demo.png)](https://www.instagram.com/p/Dd9_cGcqTMs/)
+
+Featured on the official [Claude Instagram](https://www.instagram.com/p/DfH6EZ0mtOd) account:
+
+[![Claude Instagram feature](assets/cauldron-claude.jpg)](https://www.instagram.com/p/DfH6EZ0mtOd)
 
 An interactive prop built on a Raspberry Pi.
 Drop some items into the cauldron and an IR beam break starts the sequence: the camera takes a photo, a vision model writes a three-line spell about what it sees, and three text-to-speech "witch" voices recite it with the LED ring set to each witch's color.
@@ -102,7 +106,7 @@ See `trivia_game.py` for the exact rules and [`docs/trivia.md`](docs/trivia.md) 
 
 ## Hex Hollow Bridge
 
-![Hex Hollow title screen](hex-hollow-cover.png)
+![Hex Hollow title screen](assets/hex-hollow-cover.png)
 
 A standalone HTTP bridge for [Hex Hollow](https://hexhollow-mnedueb6.manus.game) ([source](https://github.com/airalcorn2/hex-hollow)), a separate Godot game (a top-down witch-and-cauldron ingredient hunt) played on its own device on the same LAN rather than through this project's gamepad.
 Run `.venv/bin/python game_bridge.py` instead of `cauldron_controller.py` — both want the same LED ring and audio hardware, so this replaces the live show for as long as the game's being played, the same way `trivia_game.py` does.
